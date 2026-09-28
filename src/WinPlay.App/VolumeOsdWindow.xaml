@@ -1,0 +1,50 @@
+<Window
+    x:Class="WinPlay.App.VolumeOsdWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="WinPlay volume">
+
+    <Grid x:Name="Root" Width="340" Height="118" Background="#202020">
+        <TextBlock
+            x:Name="NameText"
+            Margin="20,16,90,0"
+            VerticalAlignment="Top"
+            Foreground="#E5E5E5"
+            FontFamily="Microsoft YaHei UI"
+            FontSize="16"
+            TextTrimming="CharacterEllipsis"
+            Text="WinPlay" />
+        <TextBlock
+            x:Name="PercentText"
+            Margin="0,12,20,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Foreground="#4ADE80"
+            FontFamily="Microsoft YaHei UI"
+            FontSize="22"
+            FontWeight="SemiBold"
+            Text="20%" />
+        <Grid
+            x:Name="BarTrack"
+            Width="300"
+            Height="10"
+            Margin="20,58,0,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Background="#3F3F46">
+            <Border
+                x:Name="BarFill"
+                Width="0"
+                HorizontalAlignment="Left"
+                Background="#4ADE80" />
+        </Grid>
+        <TextBlock
+            x:Name="TipText"
+            Margin="20,78,20,0"
+            VerticalAlignment="Top"
+            Foreground="#A1A1AA"
+            FontFamily="Microsoft YaHei UI"
+            FontSize="12"
+            Text="WinPlay 音量" />
+    </Grid>
+</Window>

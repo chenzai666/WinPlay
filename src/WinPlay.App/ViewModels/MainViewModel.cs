@@ -18,7 +18,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly AirPlayBrowser _browser;
     private readonly StreamController _streams = new();
     private readonly NowPlayingService _nowPlaying;
+    private readonly MediaVolumeKeys _mediaKeys = new();
+    private readonly Dictionary<string, double> _muteRestore = new();
+    private readonly HashSet<string> _manualStop = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherQueue _dispatcher;
+    private DateTime _nextAutoConnectUtc = DateTime.MinValue;
     private string _status = "Looking for AirPlay devices…";
     private int _deviceCount;
 
@@ -54,6 +58,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         _nowPlaying = new NowPlayingService(_streams);
         _nowPlaying.Start();
+        _mediaKeys.VolumeUp += () => NudgeStreamingVolume(5);
+        _mediaKeys.VolumeDown += () => NudgeStreamingVolume(-5);
+        _mediaKeys.Mute += ToggleStreamingMute;
     }
 
     public string Status
@@ -63,6 +70,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     public bool HasNoDevices => _deviceCount == 0;
+
+    /// <summary>Shows the on-screen volume bar. Set by the app window.</summary>
+    public Action<string, double>? ShowVolumeHud { get; set; }
 
     // ------------------------------------------------------------ row actions
 
@@ -74,11 +84,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (on)
             {
                 row.SetStatus("Connecting…");
+                PlaybackMemory.RememberDevice(row.Key, row.DisplayName);
                 await _streams.StartAudioAsync(row.Entry, PercentToDb(row.VolumePercent), CancellationToken.None);
                 _dispatcher.TryEnqueue(() => { row.SetStreamingStatus(); RefreshStatus(); });
             }
             else
             {
+                _manualStop.Add(row.Key);
+                PlaybackMemory.RememberVolume(row.Key, row.DisplayName, row.VolumePercent);
                 await _streams.StopAudioAsync(row.Key);
                 _dispatcher.TryEnqueue(() => { row.SetStatus(null); RefreshStatus(); });
             }
@@ -93,9 +106,55 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
         finally
         {
-            _dispatcher.TryEnqueue(() => row.IsBusy = false);
+            _dispatcher.TryEnqueue(() =>
+            {
+                row.IsBusy = false;
+                SyncMediaKeys();
+            });
         }
     }
+
+    /// <summary>Keyboard volume keys: step every live HomePod stream. No-op when nothing is streaming.</summary>
+    public void NudgeStreamingVolume(int deltaPercent)
+    {
+        _dispatcher.TryEnqueue(() =>
+        {
+            foreach (var row in Rows)
+            {
+                if (!row.IsAudioChecked) continue;
+                row.VolumePercent = Math.Clamp(row.VolumePercent + deltaPercent, 0, 100);
+            }
+            RefreshStatus();
+        });
+    }
+
+    public void ToggleStreamingMute()
+    {
+        _dispatcher.TryEnqueue(() =>
+        {
+            var live = Rows.Where(r => r.IsAudioChecked).ToList();
+            if (live.Count == 0) return;
+            bool anyAudible = live.Any(r => r.VolumePercent > 0.5);
+            foreach (var row in live)
+            {
+                if (anyAudible)
+                {
+                    if (row.VolumePercent > 0.5) _muteRestore[row.Key] = row.VolumePercent;
+                    row.VolumePercent = 0;
+                }
+                else
+                {
+                    row.VolumePercent = _muteRestore.TryGetValue(row.Key, out double saved)
+                        ? saved
+                        : PlaybackMemory.GetVolume(row.Key, row.DisplayName);
+                }
+            }
+            RefreshStatus();
+        });
+    }
+
+    private void SyncMediaKeys() =>
+        _mediaKeys.SetArmed(Rows.Any(r => r.IsAudioChecked));
 
     private async Task OnMirrorToggleAsync(PickerRowViewModel row, bool on)
     {
@@ -128,8 +187,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
-    private Task OnVolumeAsync(PickerRowViewModel row, double percent) =>
-        _streams.SetVolumeAsync(row.Key, PercentToDb(percent));
+    private Task OnVolumeAsync(PickerRowViewModel row, double percent)
+    {
+        PlaybackMemory.RememberVolume(row.Key, row.DisplayName, percent);
+        if (row.IsAudioChecked)
+            ShowVolumeHud?.Invoke(row.DisplayName, percent);
+        return _streams.SetVolumeAsync(row.Key, PercentToDb(percent));
+    }
 
     /// <summary>0 % = AirPlay mute sentinel −144; otherwise linear −30…0 dBFS.</summary>
     private static double PercentToDb(double percent) =>
@@ -169,12 +233,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
             else
             {
-                Rows.Insert(Math.Min(i, Rows.Count), new PickerRowViewModel(entry)
+                var created = new PickerRowViewModel(entry)
                 {
                     AudioToggleRequested = OnAudioToggleAsync,
                     MirrorToggleRequested = OnMirrorToggleAsync,
                     VolumeChanged = OnVolumeAsync,
-                });
+                };
+                created.SetVolumeSilently(PlaybackMemory.GetVolume(entry.Key, entry.DisplayName));
+                Rows.Insert(Math.Min(i, Rows.Count), created);
             }
         }
         // Only drop rows that are gone AND not actively streaming (don't yank a live session
@@ -191,14 +257,34 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _deviceCount = deviceCount;
         RefreshStatus();
         OnPropertyChanged(nameof(HasNoDevices));
+        TryAutoConnect();
+    }
+
+    private void TryAutoConnect()
+    {
+        if (DateTime.UtcNow < _nextAutoConnectUtc) return;
+        if (Rows.Any(r => r.IsAudioChecked || r.IsBusy)) return;
+
+        var candidates = Rows.Where(r => r.IsAudioCapable && !_manualStop.Contains(r.Key)).ToList();
+        PickerRowViewModel? target = candidates.FirstOrDefault(r => PlaybackMemory.IsPreferred(r.Key, r.DisplayName));
+        if (target is null && candidates.Count == 1)
+            target = candidates[0];
+        if (target is null) return;
+
+        _nextAutoConnectUtc = DateTime.UtcNow.AddSeconds(20);
+        target.SetVolumeSilently(PlaybackMemory.GetVolume(target.Key, target.DisplayName));
+        target.IsAudioChecked = true;
     }
 
     private void RefreshStatus()
     {
         int active = _streams.ActiveCount;
-        Status = active > 0
-            ? $"Streaming to {active} destination{(active == 1 ? "" : "s")}"
-            : $"{Rows.Count} destination{(Rows.Count == 1 ? "" : "s")} available";
+        var streaming = Rows.Where(r => r.IsAudioChecked).ToList();
+        Status = streaming.Count > 0
+            ? $"正在推流 · 音量 {streaming.Average(r => r.VolumePercent):0}%"
+            : active > 0
+                ? $"Streaming to {active} destination{(active == 1 ? "" : "s")}"
+                : $"{Rows.Count} destination{(Rows.Count == 1 ? "" : "s")} available";
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -208,6 +294,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _mediaKeys.Dispose();
         _browser.DevicesChanged -= OnDevicesChanged;
         _browser.Dispose();
         await _nowPlaying.DisposeAsync();

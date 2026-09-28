@@ -281,7 +281,7 @@ public sealed class StreamController : IAsyncDisposable
         return await GroupSession.ConnectAsync(members,
             (memberName, stage) => SessionStage?.Invoke(entry.Key,
                 members.Count > 1 ? $"{memberName}: {stage}" : stage),
-            timeout.Token).ConfigureAwait(false);
+            timeout.Token, AirPlayStreamingSettings.LatencyFrames).ConfigureAwait(false);
     }
 
     /// <summary>Runs the on-screen-PIN pairing flow against the entry's leader (Apple TV) and stores the result.</summary>

@@ -96,7 +96,8 @@ public sealed class GroupSession : IAsyncDisposable
     /// no member could be connected.
     /// </summary>
     public static async Task<GroupSession> ConnectAsync(IReadOnlyList<Member> members,
-        Action<string, string>? stageChanged = null, CancellationToken ct = default)
+        Action<string, string>? stageChanged = null, CancellationToken ct = default,
+        int latencyFrames = RaopSession.DefaultLatencyFrames)
     {
         if (members.Count == 0)
             throw new ArgumentException("group has no connectable members", nameof(members));
@@ -114,7 +115,7 @@ public sealed class GroupSession : IAsyncDisposable
             {
                 var session = await RaopSession.ConnectAsync(member.Address, member.Port,
                     member.UsePtp, peers, stage => stageChanged?.Invoke(member.Name, stage), ct,
-                    member.Credentials).ConfigureAwait(false);
+                    member.Credentials, latencyFrames).ConfigureAwait(false);
                 connected.Add((member, session));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

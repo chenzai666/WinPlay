@@ -16,7 +16,7 @@ public sealed class PickerRowViewModel : INotifyPropertyChanged
     private bool _isMirrorChecked;
     private bool _isBusy;
     private string? _statusOverride;
-    private double _volumePercent = 60;
+    private double _volumePercent = 20;
 
     public PickerRowViewModel(PickerEntry entry) => Entry = entry;
 
@@ -127,6 +127,13 @@ public sealed class PickerRowViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             _ = VolumeChanged?.Invoke(this, value);
         }
+    }
+
+    /// <summary>Restore a saved level without notifying the stream (device is not connected yet).</summary>
+    public void SetVolumeSilently(double value)
+    {
+        _volumePercent = Math.Clamp(value, 0, 100);
+        OnPropertyChanged(nameof(VolumePercent));
     }
 
     public void SetStatus(string? status)

@@ -28,8 +28,17 @@ namespace WinPlay.Core.Raop;
 /// </summary>
 public sealed class RaopSession : IAsyncDisposable
 {
-    private const int LatencyFrames = 88200; // ~2 s at 44.1 kHz (classic realtime latency)
+    /// <summary>TuneBlade "Normal": 2 s. Real-time presets pass a smaller value.</summary>
+    public const int DefaultLatencyFrames = 88200;
     private const int SampleRate = 44100;
+
+    /// <summary>Converts a TuneBlade-style buffer in milliseconds into ALAC frame units.</summary>
+    public static int FramesForBufferMilliseconds(int milliseconds)
+    {
+        int frames = (int)(SampleRate * (Math.Clamp(milliseconds, 100, 5000) / 1000.0));
+        frames -= frames % 352;
+        return Math.Max(352, frames);
+    }
 
     private readonly RtspConnection _rtsp = new();
     private readonly NtpClock _clock = new();
@@ -39,6 +48,7 @@ public sealed class RaopSession : IAsyncDisposable
     private readonly ulong _streamConnectionId;
     private readonly uint _ssrc;
     private readonly bool _usePtp;
+    private readonly int _latencyFrames;
     private readonly List<IPAddress> _groupPeers = [];
     private HapPairingCredentials? _credentials;
     private PtpMaster? _ptp;
@@ -70,8 +80,9 @@ public sealed class RaopSession : IAsyncDisposable
     public long FramesSent => Interlocked.Read(ref _framesSent);
     public TimeSpan Elapsed => TimeSpan.FromSeconds(FramesSent * 352.0 / SampleRate);
 
-    private RaopSession(bool usePtp)
+    private RaopSession(bool usePtp, int latencyFrames)
     {
+        _latencyFrames = Math.Clamp(latencyFrames, 352, SampleRate * 5);
         // One session id serves as RTSP URI number and streamConnectionID — receivers
         // correlate the RTP flow with the announced stream through it. The RTP SSRC is
         // the same id in NTP mode but ZERO in PTP mode (owntone parity — iOS senders
@@ -97,9 +108,10 @@ public sealed class RaopSession : IAsyncDisposable
     /// </param>
     public static async Task<RaopSession> ConnectAsync(IPAddress address, int port, bool usePtp,
         IReadOnlyList<IPAddress>? groupPeers = null, Action<string>? stageChanged = null,
-        CancellationToken ct = default, HapPairingCredentials? credentials = null)
+        CancellationToken ct = default, HapPairingCredentials? credentials = null,
+        int latencyFrames = DefaultLatencyFrames)
     {
-        var s = new RaopSession(usePtp) { _credentials = credentials };
+        var s = new RaopSession(usePtp, latencyFrames) { _credentials = credentials };
         if (groupPeers is not null)
             s._groupPeers.AddRange(groupPeers.Where(p => !p.Equals(address)));
         if (stageChanged is not null) s.StageChanged += stageChanged;
@@ -284,8 +296,8 @@ public sealed class RaopSession : IAsyncDisposable
                     ["audioFormat"] = 0x40000L,     // ALAC/44100/16/2
                     ["audioMode"] = "default",
                     ["controlPort"] = (long)LocalPort(_controlSocket),
-                    ["latencyMax"] = (long)LatencyFrames,
-                    ["latencyMin"] = 11025L,
+                    ["latencyMax"] = (long)_latencyFrames,
+                    ["latencyMin"] = (long)Math.Min(11025, _latencyFrames),
                     ["isMedia"] = true,
                     ["shk"] = _hap.AudioKey,
                     ["supportsDynamicStreamID"] = false,
@@ -460,16 +472,16 @@ public sealed class RaopSession : IAsyncDisposable
             {
                 pkt[1] = 0xD7; // PT 215 time announce
                 BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - LatencyFrames);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
                 BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - 11025);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
                 BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
             }
             else
             {
                 pkt[1] = 0xD4;
                 BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - LatencyFrames);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
                 BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
                 BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
             }

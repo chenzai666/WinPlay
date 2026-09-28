@@ -56,6 +56,9 @@ public partial class App : Application
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _dispatcher = dispatcher;
         _viewModel = new MainViewModel(dispatcher);
+        var osd = new VolumeOsdWindow();
+        _viewModel.ShowVolumeHud = (name, percent) =>
+            dispatcher.TryEnqueue(() => osd.ShowLevel(name, percent));
         _flyout = new FlyoutWindow(_viewModel);
 
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "winplay.ico");
@@ -73,6 +76,11 @@ public partial class App : Application
         [
             new TrayMenuItem { Text = "Open WinPlay", IsDefault = true, Clicked = () => _dispatcher?.TryEnqueue(() => _flyout?.ShowNearTray()) },
             TrayMenuItem.Separator,
+            BufferItem(AirPlayStreamingSettings.Mode.RealTime, "AirPlay 实时（约 0.4 秒）"),
+            BufferItem(AirPlayStreamingSettings.Mode.Low, "AirPlay 低延迟（0.7 秒）"),
+            BufferItem(AirPlayStreamingSettings.Mode.Normal, "AirPlay 普通（2 秒）"),
+            BufferItem(AirPlayStreamingSettings.Mode.Buffered, "AirPlay 缓冲（3 秒）"),
+            TrayMenuItem.Separator,
             new TrayMenuItem
             {
                 Text = "Start with Windows",
@@ -87,6 +95,13 @@ public partial class App : Application
             new TrayMenuItem { Text = "Quit WinPlay", Clicked = () => _dispatcher?.TryEnqueue(ExitApp) },
         ];
     }
+
+    private static TrayMenuItem BufferItem(AirPlayStreamingSettings.Mode mode, string label) => new()
+    {
+        Text = label,
+        IsChecked = AirPlayStreamingSettings.Current == mode,
+        Clicked = () => AirPlayStreamingSettings.Set(mode),
+    };
 
     private DispatcherQueue? _dispatcher;
 
