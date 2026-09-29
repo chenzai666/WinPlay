@@ -69,6 +69,7 @@ public sealed class RaopSession : IAsyncDisposable
     private uint _startTimestamp;
     private long _framesSent;
     private long _audioSendFailures;
+    private AudioTimeline _timeline;
 
     // Recent-packet history for receiver retransmit requests (PT 0xD5 → reply 0xD6).
     private const int ResendRingSize = 1024;
@@ -358,6 +359,7 @@ public sealed class RaopSession : IAsyncDisposable
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 
         _audioCrypto = new AudioPacketCrypto(_hap!.AudioKey);
+        _timeline = new AudioTimeline(_startTimestamp, MonotonicClock.NowNanoseconds);
         await SendSyncAsync(first: true, _cts.Token).ConfigureAwait(false);
         _loops.Add(Task.Run(() => SyncLoopAsync(_cts.Token)));
         _loops.Add(Task.Run(() => FeedbackLoopAsync(_cts.Token)));
@@ -424,7 +426,9 @@ public sealed class RaopSession : IAsyncDisposable
             while (!_stopped)
             {
                 double dueMs = _framesSent * 352000.0 / SampleRate;
-                double nowMs = sw.Elapsed.TotalMilliseconds;
+                double nowMs = _usePtp
+                    ? (MonotonicClock.NowNanoseconds - _timeline.StartNanoseconds) / 1_000_000.0
+                    : sw.Elapsed.TotalMilliseconds;
                 if (nowMs < dueMs)
                 {
                     int sleep = (int)(dueMs - nowMs);
@@ -488,14 +492,15 @@ public sealed class RaopSession : IAsyncDisposable
     private async Task SendSyncAsync(bool first, CancellationToken ct)
     {
         byte[] pkt = new byte[_usePtp ? 28 : 20];
-        uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
+        var position = _timeline.Position(Interlocked.Read(ref _framesSent));
+        uint nowTs = position.Rtp;
         pkt[0] = first ? (byte)0x90 : (byte)0x80;
         if (_usePtp)
         {
             pkt[1] = 0xD7; // PT 215 time announce
             BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
             BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), position.Nanoseconds);
             BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
             BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
         }

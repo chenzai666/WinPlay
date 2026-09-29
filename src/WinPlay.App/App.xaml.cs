@@ -77,7 +77,7 @@ public partial class App : Application
         [
             new TrayMenuItem { Text = "Open WinPlay", IsDefault = true, Clicked = () => _dispatcher?.TryEnqueue(() => _flyout?.ShowNearTray()) },
             TrayMenuItem.Separator,
-            BufferItem(AirPlayStreamingSettings.Mode.RealTime, "AirPlay 实时（约 0.4 秒）"),
+            BufferItem(AirPlayStreamingSettings.Mode.RealTime, "AirPlay 实时（约 0.3 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Low, "AirPlay 低延迟（0.7 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Normal, "AirPlay 普通（2 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Buffered, "AirPlay 缓冲（3 秒）"),
