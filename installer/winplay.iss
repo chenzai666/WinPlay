@@ -13,7 +13,7 @@
 
 #define AppName "WinPlay"
 #define AppPublisher "Dinesh Dhotrad"
-#define AppUrl "https://github.com/dineshdhotrad/WinPlay"
+#define AppUrl "https://github.com/chenzai666/WinPlay"
 #define AppExe "WinPlay.App.exe"
 
 [Setup]

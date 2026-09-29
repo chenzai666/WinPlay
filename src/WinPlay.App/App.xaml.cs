@@ -68,11 +68,11 @@ public partial class App : Application
         _tray.MenuBuilder = BuildTrayMenu;
     }
 
-    private const string RepositoryUrl = "https://github.com/dineshdhotrad/WinPlay";
+    private const string RepositoryUrl = "https://github.com/chenzai666/WinPlay";
 
     private IReadOnlyList<TrayMenuItem> BuildTrayMenu()
     {
-        string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.3";
+        string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.4";
         return
         [
             new TrayMenuItem { Text = "Open WinPlay", IsDefault = true, Clicked = () => _dispatcher?.TryEnqueue(() => _flyout?.ShowNearTray()) },
