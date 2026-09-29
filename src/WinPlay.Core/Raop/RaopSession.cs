@@ -237,7 +237,7 @@ public sealed class RaopSession : IAsyncDisposable
         long eventPort = sessionSetup.TryGetValue("eventPort", out object? ep) && ep is long e ? e : 0;
         Stage($"event channel → port {eventPort}");
         if (eventPort > 0)
-            StartEventChannel(_rtsp.RemoteAddress, (int)eventPort);
+            await StartEventChannelAsync(_rtsp.RemoteAddress, (int)eventPort, ct).ConfigureAwait(false);
 
         if (_usePtp)
         {
@@ -594,6 +594,7 @@ public sealed class RaopSession : IAsyncDisposable
             {
                 var resp = await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, ct)
                     .ConfigureAwait(false);
+                resp.EnsureSuccess("POST /feedback");
                 long n = Interlocked.Increment(ref _feedbackCount);
                 if (n <= 10 || n % 15 == 0)
                 {
@@ -640,14 +641,15 @@ public sealed class RaopSession : IAsyncDisposable
 
     // ------------------------------------------------------------ event channel
 
-    private void StartEventChannel(IPAddress address, int port)
+    private async Task StartEventChannelAsync(IPAddress address, int port, CancellationToken ct)
     {
         _eventTcp = new TcpClient();
+        await _eventTcp.ConnectAsync(address, port, ct).ConfigureAwait(false);
+        Stage("event channel connected");
         _loops.Add(Task.Run(async () =>
         {
             try
             {
-                await _eventTcp.ConnectAsync(address, port, _cts.Token).ConfigureAwait(false);
                 var stream = _eventTcp.GetStream();
                 var crypto = new ChannelCrypto(_hap!.EventsWriteKey, _hap.EventsReadKey);
                 bool triedSwap = false;
@@ -657,7 +659,7 @@ public sealed class RaopSession : IAsyncDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     int n = await stream.ReadAsync(buf, _cts.Token).ConfigureAwait(false);
-                    if (n == 0) return;
+                    if (n == 0) throw new IOException("receiver closed event channel");
                     raw.Write(buf, 0, n);
                     try
                     {
@@ -694,9 +696,13 @@ public sealed class RaopSession : IAsyncDisposable
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException)
+            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException or CryptographicException)
             {
-                if (!_cts.IsCancellationRequested) Stage($"event channel closed: {ex.Message}");
+                if (!_cts.IsCancellationRequested)
+                {
+                    Stage($"event channel closed: {ex.Message}");
+                    RaiseFaulted(ex);
+                }
             }
         }));
     }
