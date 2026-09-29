@@ -86,6 +86,11 @@ public sealed class PtpMaster : IDisposable
     {
         public int RefCount;
         public DateTime LastSeen;
+        public long Received;
+        public long DelayRequests;
+        public long Sent;
+        public long SendFailures;
+        public ulong? AdvertisedMaster;
     }
 
     private readonly Socket _eventSocket;
@@ -156,6 +161,17 @@ public sealed class PtpMaster : IDisposable
         Diagnostic?.Invoke($"ptp: peer {address} removed");
     }
 
+    public string DescribePeer(IPAddress address)
+    {
+        lock (_peersLock)
+        {
+            if (!_peers.TryGetValue(address, out var state)) return $"{address}: absent";
+            return $"{address}: tx={state.Sent} errors={state.SendFailures} rx={state.Received} "
+                + $"delayReq={state.DelayRequests} lastSeenMs={(DateTime.UtcNow - state.LastSeen).TotalMilliseconds:F0} "
+                + $"advertisedMaster={state.AdvertisedMaster?.ToString("X16") ?? "unknown"}";
+        }
+    }
+
     // ------------------------------------------------------------ send loops
 
     private async Task AnnounceLoopAsync(CancellationToken ct)
@@ -200,8 +216,14 @@ public sealed class PtpMaster : IDisposable
             try
             {
                 socket.SendTo(message, new IPEndPoint(address, port));
+                lock (_peersLock)
+                    if (_peers.TryGetValue(address, out var state)) state.Sent++;
             }
-            catch (SocketException) { }
+            catch (SocketException)
+            {
+                lock (_peersLock)
+                    if (_peers.TryGetValue(address, out var state)) state.SendFailures++;
+            }
         }
     }
 
@@ -227,7 +249,13 @@ public sealed class PtpMaster : IDisposable
             lock (_peersLock)
             {
                 if (_peers.TryGetValue(from, out var state))
+                {
                     state.LastSeen = DateTime.UtcNow;
+                    state.Received++;
+                    if ((buf[0] & 0x0F) == 1) state.DelayRequests++;
+                    if ((buf[0] & 0x0F) == 0x0B && r.ReceivedBytes >= 64)
+                        state.AdvertisedMaster = BinaryPrimitives.ReadUInt64BigEndian(buf.AsSpan(53));
+                }
             }
 
             switch (buf[0] & 0x0F)
@@ -237,7 +265,7 @@ public sealed class PtpMaster : IDisposable
                     _generalSocket.SendTo(BuildDelayResp(ClockId, buf.AsSpan(0, r.ReceivedBytes), MonotonicClock.Now),
                         new IPEndPoint(from, GeneralPort));
                     if (Interlocked.Increment(ref _delayReqsAnswered) == 1)
-                        Diagnostic?.Invoke($"ptp: first Delay_Req from {from} — receiver is slaving to our clock");
+                        Diagnostic?.Invoke($"ptp: first Delay_Req from {from} received (clock lock unconfirmed)");
                     break;
                 case 0x02: // PDelay_Req → PDelay_Resp (event) + PDelay_Resp_Follow_Up (general)
                     if (r.ReceivedBytes < 44) break;

@@ -31,7 +31,7 @@ public sealed class DiagnosticsLog
     private void WriteStartupLog(Entry entry)
     {
         // Opt-in local diagnostics for a test run; never store media payloads.
-        if (entry.Message.Contains("event:") || entry.Message.Contains("feedback")) return;
+        if (entry.Message.Contains("event:")) return;
         try
         {
             lock (_fileGate)

@@ -285,6 +285,7 @@ public sealed class RaopSession : IAsyncDisposable
         }
 
         Stage("SETUP (stream: realtime ALAC 44.1/16/2)");
+        Stage($"requested audio buffer: {_latencyFrames} frames ({_latencyFrames * 1000.0 / SampleRate:F0}ms)");
         var streamSetup = await PlistRequestAsync("SETUP", new Dictionary<string, object?>
         {
             ["streams"] = new List<object?>
@@ -594,6 +595,12 @@ public sealed class RaopSession : IAsyncDisposable
                 var resp = await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, ct)
                     .ConfigureAwait(false);
                 long n = Interlocked.Increment(ref _feedbackCount);
+                if (n <= 10 || n % 15 == 0)
+                {
+                    Stage($"transport: feedbackStatus={resp.StatusCode} packets={FramesSent} sendErrors={Interlocked.Read(ref _audioSendFailures)}");
+                    if (_ptp is not null)
+                        foreach (var peer in _ptpPeers) Stage($"ptp health: {_ptp.DescribePeer(peer)}");
+                }
                 if (resp.Body.Length > 0 && (n <= 5 || n % 15 == 0))
                 {
                     try
