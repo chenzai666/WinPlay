@@ -127,7 +127,9 @@ public sealed class RaopSession : IAsyncDisposable
         }
     }
 
-    private void Stage(string message) => StageChanged?.Invoke(message);
+    private readonly Stopwatch _sessionAge = Stopwatch.StartNew();
+
+    private void Stage(string message) => StageChanged?.Invoke($"+{_sessionAge.Elapsed.TotalMilliseconds:F0}ms {message}");
 
     private async Task HandshakeAsync(IPAddress address, int port, CancellationToken ct)
     {
@@ -235,7 +237,7 @@ public sealed class RaopSession : IAsyncDisposable
         long eventPort = sessionSetup.TryGetValue("eventPort", out object? ep) && ep is long e ? e : 0;
         Stage($"event channel → port {eventPort}");
         if (eventPort > 0)
-            StartEventChannel(_rtsp.RemoteAddress, (int)eventPort);
+            await StartEventChannelAsync(_rtsp.RemoteAddress, (int)eventPort, ct).ConfigureAwait(false);
 
         if (_usePtp)
         {
@@ -283,6 +285,7 @@ public sealed class RaopSession : IAsyncDisposable
         }
 
         Stage("SETUP (stream: realtime ALAC 44.1/16/2)");
+        Stage($"requested audio buffer: {_latencyFrames} frames ({_latencyFrames * 1000.0 / SampleRate:F0}ms)");
         var streamSetup = await PlistRequestAsync("SETUP", new Dictionary<string, object?>
         {
             ["streams"] = new List<object?>
@@ -355,6 +358,7 @@ public sealed class RaopSession : IAsyncDisposable
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 
         _audioCrypto = new AudioPacketCrypto(_hap!.AudioKey);
+        await SendSyncAsync(first: true, _cts.Token).ConfigureAwait(false);
         _loops.Add(Task.Run(() => SyncLoopAsync(_cts.Token)));
         _loops.Add(Task.Run(() => FeedbackLoopAsync(_cts.Token)));
 
@@ -410,6 +414,7 @@ public sealed class RaopSession : IAsyncDisposable
 
     private void AudioPump(IAudioSource source)
     {
+        bool loggedSignal = false;
         timeBeginPeriod(1);
         try
         {
@@ -436,6 +441,12 @@ public sealed class RaopSession : IAsyncDisposable
                 try
                 {
                     _audioSocket!.SendTo(packet, _receiverData!);
+                    if (first) Stage("first audio packet sent");
+                    if (!loggedSignal && samples.ContainsAnyExcept((short)0))
+                    {
+                        loggedSignal = true;
+                        Stage("first non-silent audio packet sent");
+                    }
                 }
                 catch (SocketException ex)
                 {
@@ -462,40 +473,42 @@ public sealed class RaopSession : IAsyncDisposable
     /// </summary>
     private async Task SyncLoopAsync(CancellationToken ct)
     {
-        bool first = true;
-        byte[] pkt = new byte[_usePtp ? 28 : 20];
         while (!ct.IsCancellationRequested)
         {
-            uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
-            pkt[0] = first ? (byte)0x90 : (byte)0x80;
-            if (_usePtp)
-            {
-                pkt[1] = 0xD7; // PT 215 time announce
-                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
-            }
-            else
-            {
-                pkt[1] = 0xD4;
-                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
-            }
             try
             {
-                await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
-                if (first) Stage($"first sync packet sent to {_receiverControl}");
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+                await SendSyncAsync(first: false, ct).ConfigureAwait(false);
             }
             catch (SocketException ex) { Stage($"sync send failed: {ex.SocketErrorCode}"); }
             catch (OperationCanceledException) { return; }
-            first = false;
-            try { await Task.Delay(1000, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { return; }
         }
+    }
+
+    private async Task SendSyncAsync(bool first, CancellationToken ct)
+    {
+        byte[] pkt = new byte[_usePtp ? 28 : 20];
+        uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
+        pkt[0] = first ? (byte)0x90 : (byte)0x80;
+        if (_usePtp)
+        {
+            pkt[1] = 0xD7; // PT 215 time announce
+            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
+        }
+        else
+        {
+            pkt[1] = 0xD4;
+            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
+        }
+        await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
+        if (first) Stage($"first sync packet sent to {_receiverControl}");
     }
 
     private long _timingRequests;
@@ -581,7 +594,14 @@ public sealed class RaopSession : IAsyncDisposable
             {
                 var resp = await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, ct)
                     .ConfigureAwait(false);
+                resp.EnsureSuccess("POST /feedback");
                 long n = Interlocked.Increment(ref _feedbackCount);
+                if (n <= 10 || n % 15 == 0)
+                {
+                    Stage($"transport: feedbackStatus={resp.StatusCode} packets={FramesSent} sendErrors={Interlocked.Read(ref _audioSendFailures)}");
+                    if (_ptp is not null)
+                        foreach (var peer in _ptpPeers) Stage($"ptp health: {_ptp.DescribePeer(peer)}");
+                }
                 if (resp.Body.Length > 0 && (n <= 5 || n % 15 == 0))
                 {
                     try
@@ -621,14 +641,15 @@ public sealed class RaopSession : IAsyncDisposable
 
     // ------------------------------------------------------------ event channel
 
-    private void StartEventChannel(IPAddress address, int port)
+    private async Task StartEventChannelAsync(IPAddress address, int port, CancellationToken ct)
     {
         _eventTcp = new TcpClient();
+        await _eventTcp.ConnectAsync(address, port, ct).ConfigureAwait(false);
+        Stage("event channel connected");
         _loops.Add(Task.Run(async () =>
         {
             try
             {
-                await _eventTcp.ConnectAsync(address, port, _cts.Token).ConfigureAwait(false);
                 var stream = _eventTcp.GetStream();
                 var crypto = new ChannelCrypto(_hap!.EventsWriteKey, _hap.EventsReadKey);
                 bool triedSwap = false;
@@ -638,7 +659,7 @@ public sealed class RaopSession : IAsyncDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     int n = await stream.ReadAsync(buf, _cts.Token).ConfigureAwait(false);
-                    if (n == 0) return;
+                    if (n == 0) throw new IOException("receiver closed event channel");
                     raw.Write(buf, 0, n);
                     try
                     {
@@ -675,9 +696,13 @@ public sealed class RaopSession : IAsyncDisposable
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException)
+            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException or CryptographicException)
             {
-                if (!_cts.IsCancellationRequested) Stage($"event channel closed: {ex.Message}");
+                if (!_cts.IsCancellationRequested)
+                {
+                    Stage($"event channel closed: {ex.Message}");
+                    RaiseFaulted(ex);
+                }
             }
         }));
     }
@@ -793,9 +818,17 @@ public sealed class RaopSession : IAsyncDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _rtsp.RequestAsync(new RtspRequest { Method = "TEARDOWN", Uri = RtspUri }, cts.Token)
-                .ConfigureAwait(false);
-            Stage("TEARDOWN sent");
+            // AirPlay 2: an empty plist requests teardown of the whole session.
+            // Check acknowledgement rather than reporting success for any reply.
+            var response = await _rtsp.RequestAsync(new RtspRequest
+            {
+                Method = "TEARDOWN",
+                Uri = RtspUri,
+                Body = BinaryPlist.Write(new Dictionary<string, object?>()),
+                ContentType = "application/x-apple-binary-plist",
+            }, cts.Token).ConfigureAwait(false);
+            response.EnsureSuccess("TEARDOWN");
+            Stage("TEARDOWN acknowledged (200, whole session)");
         }
         catch (Exception ex) when (ex is RtspException or IOException or SocketException or OperationCanceledException or ObjectDisposedException)
         {

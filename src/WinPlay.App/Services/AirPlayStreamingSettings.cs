@@ -9,7 +9,7 @@ public static class AirPlayStreamingSettings
 {
     public enum Mode
     {
-        RealTime = 400,
+        RealTime = 300,
         Low = 700,
         Normal = 2000,
         Buffered = 3000,
@@ -28,9 +28,11 @@ public static class AirPlayStreamingSettings
     {
         try
         {
-            if (int.TryParse(File.ReadAllText(Path).Trim(), out int ms)
-                && Enum.IsDefined(typeof(Mode), ms))
-                Current = (Mode)ms;
+            if (int.TryParse(File.ReadAllText(Path).Trim(), out int ms))
+            {
+                if (ms == 400) Set(Mode.RealTime);
+                else if (Enum.IsDefined(typeof(Mode), ms)) Current = (Mode)ms;
+            }
         }
         catch (Exception) { }
     }

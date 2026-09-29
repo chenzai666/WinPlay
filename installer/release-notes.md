@@ -1,27 +1,17 @@
-## WinPlay 0.1.1
+## WinPlay 0.1.4
 
-A native Windows AirPlay 2 sender — stream system audio to HomePods, stereo pairs and
-multi-room groups, and mirror your screen to Apple TV, from an iOS-style tray picker.
+### 本次调整
 
-Maintenance release — functionally identical to 0.1.0, plus a project support link
-([Ko-fi ☕](https://ko-fi.com/thedinesh)). **v0.2.0 has been withdrawn** because of audio
-playback regressions; its features will return in a future release once they meet the
-quality bar. If you installed 0.2.0, install this build over it.
+- 实时缓冲档从约 0.4 秒改为约 0.3 秒，自动迁移原有实时档设置。
+- 新增设备时及时发送 PTP 通告，并在音频发送前发送首个同步包。
+- AirPlay 2 会话关闭请求使用空 plist，并检查接收端确认响应。
+- 等待事件连接建立后继续播放启动；检测事件连接关闭与保活请求失败。
+- 增加启动耗时和连接诊断。可通过环境变量 WINPLAY_STARTUP_LOG=1 启用本地日志，默认不写入诊断文件。
 
-### Install
+### 已知问题
 
-- **`WinPlay-0.1.1-win-x64-Setup.exe`** — installer (per-user, no admin). ARM64 build also attached.
-- **`WinPlay-0.1.1-win-x64-portable.zip`** — portable, no install.
+HomePod Mini 断开重连后仍可能需要等待约 1～2 分钟才出声，也可能持续无声。本版尚未解决此问题，不能保证快速重连。0.3 秒是请求的缓冲档位，不是实测端到端延迟保证。
 
-On first run Windows SmartScreen may say *"Windows protected your PC"* (expected for a new
-app) — click **More info → Run anyway**.
+### 安装
 
-### Highlights
-
-- Lossless ALAC audio with sample-accurate multi-room sync (built-in PTP grandmaster clock).
-- Local speakers muted while streaming (audio "moved" to the receiver, like AirPlay on a Mac).
-- Apple TV screen mirroring with hardware H.264 encode and audio carried in the same
-  session for lock-step A/V sync.
-- Transient / PIN / pair-verify pairing; credentials stored DPAPI-encrypted.
-
-100% managed .NET, no runtime prerequisites. GPL-3.0-or-later.
+Windows x64 使用 WinPlay-0.1.4-win-x64-Setup.exe；也提供便携压缩包。安装到当前用户目录，无需管理员权限。
