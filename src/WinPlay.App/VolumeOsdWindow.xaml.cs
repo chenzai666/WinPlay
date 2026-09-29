@@ -17,14 +17,17 @@ public sealed partial class VolumeOsdWindow : Window
 
     private readonly AppWindow _appWindow;
     private readonly DispatcherTimer _hide;
+    private readonly IntPtr _hwnd;
     private bool _placed;
     private bool _visible;
 
     public VolumeOsdWindow()
     {
         InitializeComponent();
-        IntPtr hwnd = WindowNative.GetWindowHandle(this);
-        _appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd));
+        _hwnd = WindowNative.GetWindowHandle(this);
+        _appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hwnd));
+        int ex = GetWindowLong(_hwnd, -20);
+        SetWindowLong(_hwnd, -20, ex | 0x00000008 | 0x00000080 | 0x08000000); // TOPMOST | TOOLWINDOW | NOACTIVATE
         _appWindow.IsShownInSwitchers = false;
 
         if (_appWindow.Presenter is OverlappedPresenter presenter)
@@ -37,7 +40,7 @@ public sealed partial class VolumeOsdWindow : Window
         }
 
         int corner = 1; // DWMWCP_DONOTROUND — flat card, like the TuneBlade popup
-        DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
+        DwmSetWindowAttribute(_hwnd, 33, ref corner, sizeof(int));
 
         _appWindow.Resize(new Windows.Graphics.SizeInt32(Width, Height));
         PlaceOnce();
@@ -71,11 +74,9 @@ public sealed partial class VolumeOsdWindow : Window
         TipText.Text = muted ? "已静音" : "WinPlay 音量";
 
         if (!_placed) PlaceOnce();
-        if (!_visible)
-        {
-            _appWindow.Show(false);
-            _visible = true;
-        }
+        ShowWindow(_hwnd, 8); // SW_SHOWNA — visible, does not steal focus
+        SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // TOPMOST | NOMOVE | NOSIZE | NOACTIVATE
+        _visible = true;
 
         _hide.Stop();
         _hide.Start();
@@ -83,14 +84,34 @@ public sealed partial class VolumeOsdWindow : Window
 
     private void PlaceOnce()
     {
-        var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
-        var work = area.WorkArea;
-        _appWindow.Move(new Windows.Graphics.PointInt32(
-            work.X + (work.Width - Width) / 2,
-            work.Y + work.Height - Height - 100));
+        int x, y;
+        try
+        {
+            var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
+            var work = area.WorkArea;
+            x = work.X + (work.Width - Width) / 2;
+            y = work.Y + work.Height - Height - 100;
+        }
+        catch (Exception)
+        {
+            x = Math.Max(0, (GetSystemMetrics(0) - Width) / 2);
+            y = Math.Max(0, GetSystemMetrics(1) - Height - 100);
+        }
+        SetWindowPos(_hwnd, new IntPtr(-1), x, y, Width, Height, 0x0010); // NOACTIVATE
+        _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
         _placed = true;
     }
 
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hwnd, int cmd);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 }

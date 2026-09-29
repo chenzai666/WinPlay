@@ -18,6 +18,7 @@ public partial class App : Application
 {
     private TrayIcon? _tray;
     private FlyoutWindow? _flyout;
+    private HotkeySettingsWindow? _hotkeys;
     private MainViewModel? _viewModel;
     private static Mutex? _instanceMutex;
 
@@ -80,6 +81,12 @@ public partial class App : Application
             BufferItem(AirPlayStreamingSettings.Mode.Low, "AirPlay 低延迟（0.7 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Normal, "AirPlay 普通（2 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Buffered, "AirPlay 缓冲（3 秒）"),
+            new TrayMenuItem { Text = "设置快捷键…", Clicked = OpenHotkeySettings },
+            new TrayMenuItem
+            {
+                Text = $"快捷键 {HotkeySettings.VolumeUp.Text} / {HotkeySettings.VolumeDown.Text} / {HotkeySettings.Mute.Text}",
+                IsEnabled = false,
+            },
             TrayMenuItem.Separator,
             new TrayMenuItem
             {
@@ -104,6 +111,24 @@ public partial class App : Application
     };
 
     private DispatcherQueue? _dispatcher;
+
+    private void OpenHotkeySettings()
+    {
+        _dispatcher?.TryEnqueue(() =>
+        {
+            if (_hotkeys is null)
+            {
+                _hotkeys = new HotkeySettingsWindow();
+                _hotkeys.Closed += (_, _) =>
+                {
+                    _viewModel?.SuspendHotkeys(false);
+                    _hotkeys = null;
+                };
+            }
+            _viewModel?.SuspendHotkeys(true);
+            _hotkeys.Activate();
+        });
+    }
 
     private static void OpenUrl(string url)
     {

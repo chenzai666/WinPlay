@@ -33,6 +33,8 @@ public sealed class StreamController : IAsyncDisposable
 
     public event Action<string, string>? SessionStage;   // key, message
     public event Action<string, Exception>? SessionFailed;
+    /// <summary>Hardware volume key while the Windows endpoint is locked for streaming.</summary>
+    public event Action<VolumeGesture>? VolumeGesture;
 
     /// <summary>Rolling in-memory diagnostics log of recent session events (for a status view).</summary>
     public DiagnosticsLog Diagnostics => _diagnostics;
@@ -41,6 +43,7 @@ public sealed class StreamController : IAsyncDisposable
     {
         SessionStage += (key, msg) => _diagnostics.Add(key, msg);
         SessionFailed += (key, ex) => _diagnostics.Add(key, $"failed: {ex.Message}");
+        _mover.VolumeGestureDetected += gesture => VolumeGesture?.Invoke(gesture);
     }
 
     /// <summary>

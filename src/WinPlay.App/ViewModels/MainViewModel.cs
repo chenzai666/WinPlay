@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Microsoft.UI.Dispatching;
 using WinPlay.App.Services;
+using WinPlay.Core.Audio;
 using WinPlay.Core.Discovery;
 
 namespace WinPlay.App.ViewModels;
@@ -23,6 +24,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly HashSet<string> _manualStop = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherQueue _dispatcher;
     private DateTime _nextAutoConnectUtc = DateTime.MinValue;
+    private readonly object _gestureLock = new();
+    private DateTime _lastVolumeGestureUtc = DateTime.MinValue;
+    private int _lastVolumeGesture = int.MinValue;
     private string _status = "Looking for AirPlay devices…";
     private int _deviceCount;
 
@@ -61,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _mediaKeys.VolumeUp += () => NudgeStreamingVolume(5);
         _mediaKeys.VolumeDown += () => NudgeStreamingVolume(-5);
         _mediaKeys.Mute += ToggleStreamingMute;
+        _streams.VolumeGesture += OnEndpointVolumeGesture;
     }
 
     public string Status
@@ -117,6 +122,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     /// <summary>Keyboard volume keys: step every live HomePod stream. No-op when nothing is streaming.</summary>
     public void NudgeStreamingVolume(int deltaPercent)
     {
+        if (!AcceptVolumeGesture(Math.Sign(deltaPercent))) return;
+        WindowsVolumeFlyout.HideBurst();
         _dispatcher.TryEnqueue(() =>
         {
             foreach (var row in Rows)
@@ -130,6 +137,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public void ToggleStreamingMute()
     {
+        if (!AcceptVolumeGesture(0)) return;
+        WindowsVolumeFlyout.HideBurst();
         _dispatcher.TryEnqueue(() =>
         {
             var live = Rows.Where(r => r.IsAudioChecked).ToList();
@@ -155,6 +164,36 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void SyncMediaKeys() =>
         _mediaKeys.SetArmed(Rows.Any(r => r.IsAudioChecked));
+
+    /// <summary>Release chords while the hotkey settings window is capturing a new one.</summary>
+    public void SuspendHotkeys(bool suspended) => _mediaKeys.Suspend(suspended);
+
+    /// <summary>
+    /// Volume-up/down on the locked Windows endpoint. One physical key often arrives
+    /// both here and as a hotkey; the shared debounce keeps that to a single ±5%.
+    /// </summary>
+    private void OnEndpointVolumeGesture(VolumeGesture gesture)
+    {
+        switch (gesture)
+        {
+            case VolumeGesture.Up: NudgeStreamingVolume(5); break;
+            case VolumeGesture.Down: NudgeStreamingVolume(-5); break;
+            case VolumeGesture.Mute: ToggleStreamingMute(); break;
+        }
+    }
+
+    private bool AcceptVolumeGesture(int kind)
+    {
+        lock (_gestureLock)
+        {
+            var now = DateTime.UtcNow;
+            if (kind == _lastVolumeGesture && (now - _lastVolumeGestureUtc).TotalMilliseconds < 220)
+                return false;
+            _lastVolumeGesture = kind;
+            _lastVolumeGestureUtc = now;
+            return true;
+        }
+    }
 
     private async Task OnMirrorToggleAsync(PickerRowViewModel row, bool on)
     {
