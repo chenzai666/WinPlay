@@ -69,7 +69,6 @@ public sealed class RaopSession : IAsyncDisposable
     private uint _startTimestamp;
     private long _framesSent;
     private long _audioSendFailures;
-    private AudioTimeline _timeline;
 
     // Recent-packet history for receiver retransmit requests (PT 0xD5 → reply 0xD6).
     private const int ResendRingSize = 1024;
@@ -359,7 +358,6 @@ public sealed class RaopSession : IAsyncDisposable
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 
         _audioCrypto = new AudioPacketCrypto(_hap!.AudioKey);
-        _timeline = new AudioTimeline(_startTimestamp, MonotonicClock.NowNanoseconds);
         await SendSyncAsync(first: true, _cts.Token).ConfigureAwait(false);
         _loops.Add(Task.Run(() => SyncLoopAsync(_cts.Token)));
         _loops.Add(Task.Run(() => FeedbackLoopAsync(_cts.Token)));
@@ -426,9 +424,7 @@ public sealed class RaopSession : IAsyncDisposable
             while (!_stopped)
             {
                 double dueMs = _framesSent * 352000.0 / SampleRate;
-                double nowMs = _usePtp
-                    ? (MonotonicClock.NowNanoseconds - _timeline.StartNanoseconds) / 1_000_000.0
-                    : sw.Elapsed.TotalMilliseconds;
+                double nowMs = sw.Elapsed.TotalMilliseconds;
                 if (nowMs < dueMs)
                 {
                     int sleep = (int)(dueMs - nowMs);
@@ -492,15 +488,14 @@ public sealed class RaopSession : IAsyncDisposable
     private async Task SendSyncAsync(bool first, CancellationToken ct)
     {
         byte[] pkt = new byte[_usePtp ? 28 : 20];
-        var position = _timeline.Position(Interlocked.Read(ref _framesSent));
-        uint nowTs = position.Rtp;
+        uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
         pkt[0] = first ? (byte)0x90 : (byte)0x80;
         if (_usePtp)
         {
             pkt[1] = 0xD7; // PT 215 time announce
             BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
             BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), position.Nanoseconds);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
             BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
             BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
         }
@@ -817,9 +812,17 @@ public sealed class RaopSession : IAsyncDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _rtsp.RequestAsync(new RtspRequest { Method = "TEARDOWN", Uri = RtspUri }, cts.Token)
-                .ConfigureAwait(false);
-            Stage("TEARDOWN sent");
+            // AirPlay 2: an empty plist requests teardown of the whole session.
+            // Check acknowledgement rather than reporting success for any reply.
+            var response = await _rtsp.RequestAsync(new RtspRequest
+            {
+                Method = "TEARDOWN",
+                Uri = RtspUri,
+                Body = BinaryPlist.Write(new Dictionary<string, object?>()),
+                ContentType = "application/x-apple-binary-plist",
+            }, cts.Token).ConfigureAwait(false);
+            response.EnsureSuccess("TEARDOWN");
+            Stage("TEARDOWN acknowledged (200, whole session)");
         }
         catch (Exception ex) when (ex is RtspException or IOException or SocketException or OperationCanceledException or ObjectDisposedException)
         {
