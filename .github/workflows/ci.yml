@@ -38,6 +38,19 @@ jobs:
       - name: Test
         run: dotnet test tests/WinPlay.Core.Tests/WinPlay.Core.Tests.csproj -c Release --logger "trx;LogFileName=test-results.trx"
 
+      - name: Publish portable test build
+        run: >
+          dotnet publish src/WinPlay.App/WinPlay.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:Platform=x64 -o publish/win-x64
+
+      - name: Upload portable test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinPlay-test-win-x64
+          path: publish/win-x64/
+          retention-days: 7
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

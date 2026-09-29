@@ -93,6 +93,7 @@ public sealed class PtpMaster : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly Dictionary<IPAddress, PeerState> _peers = [];
     private readonly object _peersLock = new();
+    private readonly SemaphoreSlim _announceRequested = new(0, 1);
     private ushort _announceSeq;
     private ushort _signalingSeq;
     private ushort _syncSeq;
@@ -138,6 +139,9 @@ public sealed class PtpMaster : IDisposable
                 _peers[address] = new PeerState { RefCount = 1, LastSeen = DateTime.UtcNow };
             }
         }
+        // Wake the single sender; it retains ownership of the sequence numbers.
+        try { _announceRequested.Release(); }
+        catch (SemaphoreFullException) { /* pending announce includes this peer */ }
         Diagnostic?.Invoke($"ptp: peer {address} added (clock 0x{ClockId:X16})");
     }
 
@@ -160,7 +164,7 @@ public sealed class PtpMaster : IDisposable
         {
             SendToPeers(_generalSocket, GeneralPort, BuildAnnounce(ClockId, _announceSeq++));
             SendToPeers(_generalSocket, GeneralPort, BuildSignaling(ClockId, _signalingSeq++));
-            try { await Task.Delay(1000, ct).ConfigureAwait(false); }
+            try { await _announceRequested.WaitAsync(1000, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
     }

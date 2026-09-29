@@ -127,7 +127,9 @@ public sealed class RaopSession : IAsyncDisposable
         }
     }
 
-    private void Stage(string message) => StageChanged?.Invoke(message);
+    private readonly Stopwatch _sessionAge = Stopwatch.StartNew();
+
+    private void Stage(string message) => StageChanged?.Invoke($"+{_sessionAge.Elapsed.TotalMilliseconds:F0}ms {message}");
 
     private async Task HandshakeAsync(IPAddress address, int port, CancellationToken ct)
     {
@@ -355,6 +357,7 @@ public sealed class RaopSession : IAsyncDisposable
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 
         _audioCrypto = new AudioPacketCrypto(_hap!.AudioKey);
+        await SendSyncAsync(first: true, _cts.Token).ConfigureAwait(false);
         _loops.Add(Task.Run(() => SyncLoopAsync(_cts.Token)));
         _loops.Add(Task.Run(() => FeedbackLoopAsync(_cts.Token)));
 
@@ -410,6 +413,7 @@ public sealed class RaopSession : IAsyncDisposable
 
     private void AudioPump(IAudioSource source)
     {
+        bool loggedSignal = false;
         timeBeginPeriod(1);
         try
         {
@@ -436,6 +440,12 @@ public sealed class RaopSession : IAsyncDisposable
                 try
                 {
                     _audioSocket!.SendTo(packet, _receiverData!);
+                    if (first) Stage("first audio packet sent");
+                    if (!loggedSignal && samples.ContainsAnyExcept((short)0))
+                    {
+                        loggedSignal = true;
+                        Stage("first non-silent audio packet sent");
+                    }
                 }
                 catch (SocketException ex)
                 {
@@ -462,40 +472,42 @@ public sealed class RaopSession : IAsyncDisposable
     /// </summary>
     private async Task SyncLoopAsync(CancellationToken ct)
     {
-        bool first = true;
-        byte[] pkt = new byte[_usePtp ? 28 : 20];
         while (!ct.IsCancellationRequested)
         {
-            uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
-            pkt[0] = first ? (byte)0x90 : (byte)0x80;
-            if (_usePtp)
-            {
-                pkt[1] = 0xD7; // PT 215 time announce
-                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
-            }
-            else
-            {
-                pkt[1] = 0xD4;
-                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
-                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
-            }
             try
             {
-                await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
-                if (first) Stage($"first sync packet sent to {_receiverControl}");
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+                await SendSyncAsync(first: false, ct).ConfigureAwait(false);
             }
             catch (SocketException ex) { Stage($"sync send failed: {ex.SocketErrorCode}"); }
             catch (OperationCanceledException) { return; }
-            first = false;
-            try { await Task.Delay(1000, ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { return; }
         }
+    }
+
+    private async Task SendSyncAsync(bool first, CancellationToken ct)
+    {
+        byte[] pkt = new byte[_usePtp ? 28 : 20];
+        uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
+        pkt[0] = first ? (byte)0x90 : (byte)0x80;
+        if (_usePtp)
+        {
+            pkt[1] = 0xD7; // PT 215 time announce
+            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
+        }
+        else
+        {
+            pkt[1] = 0xD4;
+            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
+            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
+        }
+        await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
+        if (first) Stage($"first sync packet sent to {_receiverControl}");
     }
 
     private long _timingRequests;
