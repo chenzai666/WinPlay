@@ -48,6 +48,7 @@ public sealed class RaopSession : IAsyncDisposable
     private readonly ulong _streamConnectionId;
     private readonly uint _ssrc;
     private readonly bool _usePtp;
+    private readonly bool _followReceiverClock;
     private readonly int _latencyFrames;
     private readonly List<IPAddress> _groupPeers = [];
     private HapPairingCredentials? _credentials;
@@ -80,9 +81,10 @@ public sealed class RaopSession : IAsyncDisposable
     public long FramesSent => Interlocked.Read(ref _framesSent);
     public TimeSpan Elapsed => TimeSpan.FromSeconds(FramesSent * 352.0 / SampleRate);
 
-    private RaopSession(bool usePtp, int latencyFrames)
+    private RaopSession(bool usePtp, int latencyFrames, bool followReceiverClock)
     {
         _latencyFrames = Math.Clamp(latencyFrames, 352, SampleRate * 5);
+        _followReceiverClock = followReceiverClock;
         // One session id serves as RTSP URI number and streamConnectionID — receivers
         // correlate the RTP flow with the announced stream through it. The RTP SSRC is
         // the same id in NTP mode but ZERO in PTP mode (owntone parity — iOS senders
@@ -108,9 +110,9 @@ public sealed class RaopSession : IAsyncDisposable
     public static async Task<RaopSession> ConnectAsync(IPAddress address, int port, bool usePtp,
         IReadOnlyList<IPAddress>? groupPeers = null, Action<string>? stageChanged = null,
         CancellationToken ct = default, HapPairingCredentials? credentials = null,
-        int latencyFrames = DefaultLatencyFrames)
+        int latencyFrames = DefaultLatencyFrames, bool followReceiverClock = false)
     {
-        var s = new RaopSession(usePtp, latencyFrames) { _credentials = credentials };
+        var s = new RaopSession(usePtp, latencyFrames, followReceiverClock) { _credentials = credentials };
         if (groupPeers is not null)
             s._groupPeers.AddRange(groupPeers.Where(p => !p.Equals(address)));
         if (stageChanged is not null) s.StageChanged += stageChanged;
@@ -245,7 +247,7 @@ public sealed class RaopSession : IAsyncDisposable
             foreach (var peer in new[] { timingPeer }.Concat(_groupPeers).Distinct())
             {
                 _ptpPeers.Add(peer);
-                _ptp!.AddPeer(peer);
+                _ptp!.AddPeer(peer, _followReceiverClock);
             }
         }
 

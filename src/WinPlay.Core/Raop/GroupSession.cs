@@ -25,7 +25,8 @@ public sealed class GroupSession : IAsyncDisposable
     /// open sessions to, but the ATV must know as clock-synced peers or it stays silent).
     /// </summary>
     public sealed record Member(string Name, IPAddress Address, int Port, bool UsePtp,
-        HapPairingCredentials? Credentials = null, IReadOnlyList<IPAddress>? ExtraPeers = null);
+        HapPairingCredentials? Credentials = null, IReadOnlyList<IPAddress>? ExtraPeers = null,
+        bool FollowReceiverClock = false);
 
     private readonly List<(Member Member, RaopSession Session)> _members;
     private BroadcastAudioSource? _broadcast;
@@ -83,9 +84,20 @@ public sealed class GroupSession : IAsyncDisposable
         foreach (var device in devices)
         {
             if (Ip(device) is not { } address) continue;
+            bool follow = device.FollowsOwnClock;
             members.Add(new Member(device.Name, address, device.AirPlayPort ?? 7000,
                 device.Features.HasFlag(AirPlayFeatures.SupportsPtp),
-                credentialStore?.Load(device.DeviceId)));
+                credentialStore?.Load(device.DeviceId),
+                FollowReceiverClock: follow));
+            try
+            {
+                device.AirPlayTxt.TryGetValue("osvers", out string? os);
+                if (string.IsNullOrEmpty(os)) device.RaopTxt.TryGetValue("osvers", out os);
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
+                    $"{DateTimeOffset.Now:O} clock-decision {device.Name} model={device.Model} osvers={os ?? ""} follow={(follow ? "receiver" : "local")}{Environment.NewLine}");
+            }
+            catch (Exception) { }
         }
         return members;
     }
@@ -115,7 +127,7 @@ public sealed class GroupSession : IAsyncDisposable
             {
                 var session = await RaopSession.ConnectAsync(member.Address, member.Port,
                     member.UsePtp, peers, stage => stageChanged?.Invoke(member.Name, stage), ct,
-                    member.Credentials, latencyFrames).ConfigureAwait(false);
+                    member.Credentials, latencyFrames, member.FollowReceiverClock).ConfigureAwait(false);
                 connected.Add((member, session));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

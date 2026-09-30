@@ -138,14 +138,16 @@ public sealed class PtpMaster : IDisposable
     }
 
     /// <summary>Reference-counted: concurrent sessions may share a peer address.</summary>
-    public void AddPeer(IPAddress address)
+    public void AddPeer(IPAddress address, bool followReceiver = false)
     {
         lock (_peersLock)
         {
+            bool follow = followReceiver || _followNextSession.Contains(address);
             if (_peers.TryGetValue(address, out var state))
             {
                 state.RefCount++;
                 state.LastSeen = DateTime.UtcNow;
+                if (follow) state.Follow = true;
             }
             else
             {
@@ -153,7 +155,7 @@ public sealed class PtpMaster : IDisposable
                 {
                     RefCount = 1,
                     LastSeen = DateTime.UtcNow,
-                    Follow = _followNextSession.Contains(address),
+                    Follow = follow,
                 };
             }
         }

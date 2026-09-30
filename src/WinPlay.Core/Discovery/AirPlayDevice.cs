@@ -84,6 +84,28 @@ public sealed class AirPlayDevice
     public bool SupportsAudio =>
         Features.HasFlag(AirPlayFeatures.SupportsAirPlayAudio) || RaopPort is not null;
 
+    /// <summary>
+    /// A standalone HomePod on audioOS 27 keeps its own PTP grandmaster and will not
+    /// play audio anchored to ours. Stereo pairs and grouped members slave instead,
+    /// so they must still receive our clock.
+    /// </summary>
+    public bool FollowsOwnClock
+    {
+        get
+        {
+            if (Subtype != AirPlayDeviceSubtype.HomePod) return false;
+            if (!string.IsNullOrEmpty(TightSyncId) || !string.IsNullOrEmpty(ParentGroupId))
+                return false;
+            string? os = null;
+            if (!AirPlayTxt.TryGetValue("osvers", out os))
+                RaopTxt.TryGetValue("osvers", out os);
+            if (string.IsNullOrEmpty(os)) return false;
+            int cut = 0;
+            while (cut < os.Length && char.IsDigit(os[cut])) cut++;
+            return cut > 0 && int.TryParse(os[..cut], out int major) && major >= 27;
+        }
+    }
+
     public static string NormalizeDeviceId(string raw) =>
         raw.Replace(":", "").Replace("-", "").Trim().ToUpperInvariant();
 }
