@@ -92,7 +92,6 @@ public sealed class RaopSession : IAsyncDisposable
         _streamConnectionId = sessionId;
         _ssrc = usePtp ? 0 : sessionId;
         _sequence = (ushort)RandomNumberGenerator.GetInt32(0, ushort.MaxValue);
-        _startTimestamp = (uint)RandomNumberGenerator.GetInt32(0, int.MaxValue);
         _sessionUri = sessionId.ToString();
     }
 
@@ -127,9 +126,7 @@ public sealed class RaopSession : IAsyncDisposable
         }
     }
 
-    private readonly Stopwatch _sessionAge = Stopwatch.StartNew();
-
-    private void Stage(string message) => StageChanged?.Invoke($"+{_sessionAge.Elapsed.TotalMilliseconds:F0}ms {message}");
+    private void Stage(string message) => StageChanged?.Invoke(message);
 
     private async Task HandshakeAsync(IPAddress address, int port, CancellationToken ct)
     {
@@ -237,7 +234,7 @@ public sealed class RaopSession : IAsyncDisposable
         long eventPort = sessionSetup.TryGetValue("eventPort", out object? ep) && ep is long e ? e : 0;
         Stage($"event channel → port {eventPort}");
         if (eventPort > 0)
-            await StartEventChannelAsync(_rtsp.RemoteAddress, (int)eventPort, ct).ConfigureAwait(false);
+            StartEventChannel(_rtsp.RemoteAddress, (int)eventPort);
 
         if (_usePtp)
         {
@@ -253,6 +250,10 @@ public sealed class RaopSession : IAsyncDisposable
         }
 
         Stage("RECORD");
+        // HomePod keeps our PTP clock across TEARDOWN. The next RECORD has to
+        // continue the same RTP sample timeline or the speaker treats the new
+        // packets as late and stays silent. The lead is the playout buffer.
+        _startTimestamp = unchecked(SharedRtpClock.Now() + (uint)_latencyFrames);
         var record = await _rtsp.RequestAsync(new RtspRequest
         {
             Method = "RECORD",
@@ -285,7 +286,6 @@ public sealed class RaopSession : IAsyncDisposable
         }
 
         Stage("SETUP (stream: realtime ALAC 44.1/16/2)");
-        Stage($"requested audio buffer: {_latencyFrames} frames ({_latencyFrames * 1000.0 / SampleRate:F0}ms)");
         var streamSetup = await PlistRequestAsync("SETUP", new Dictionary<string, object?>
         {
             ["streams"] = new List<object?>
@@ -353,12 +353,42 @@ public sealed class RaopSession : IAsyncDisposable
 
     // ------------------------------------------------------------ streaming
 
+    /// <summary>
+    /// After a disconnect, a HomePod on audioOS 27 often stays grandmaster.
+    /// Wait briefly for its Sync/Follow_Up and anchor this session there.
+    /// If it never sends one, offer our clock again.
+    /// </summary>
+    private async Task<bool> PrepareReceiverClockAsync(CancellationToken ct)
+    {
+        if (!_usePtp || _ptp is null) return false;
+        var followed = _ptpPeers.Where(_ptp.WillFollow).ToList();
+        if (followed.Count == 0) return false;
+        var until = DateTime.UtcNow.AddMilliseconds(1500);
+        while (DateTime.UtcNow < until)
+        {
+            if (followed.Any(_ptp.HasReceiverClock)) return true;
+            try { await Task.Delay(40, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+        }
+        foreach (var peer in followed)
+            _ptp.AbandonFollow(peer);
+        return false;
+    }
+
     public async Task StartStreamingAsync(IAudioSource source, double volumeDb = -18)
     {
+        bool followed = await PrepareReceiverClockAsync(_cts.Token).ConfigureAwait(false);
+        try
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
+                $"{DateTimeOffset.Now:O} shared rtp origin {_startTimestamp} latency={_latencyFrames} follow={(followed ? "receiver" : "local")}{Environment.NewLine}");
+        }
+        catch (Exception) { }
+
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 
         _audioCrypto = new AudioPacketCrypto(_hap!.AudioKey);
-        await SendSyncAsync(first: true, _cts.Token).ConfigureAwait(false);
         _loops.Add(Task.Run(() => SyncLoopAsync(_cts.Token)));
         _loops.Add(Task.Run(() => FeedbackLoopAsync(_cts.Token)));
 
@@ -414,7 +444,6 @@ public sealed class RaopSession : IAsyncDisposable
 
     private void AudioPump(IAudioSource source)
     {
-        bool loggedSignal = false;
         timeBeginPeriod(1);
         try
         {
@@ -441,12 +470,6 @@ public sealed class RaopSession : IAsyncDisposable
                 try
                 {
                     _audioSocket!.SendTo(packet, _receiverData!);
-                    if (first) Stage("first audio packet sent");
-                    if (!loggedSignal && samples.ContainsAnyExcept((short)0))
-                    {
-                        loggedSignal = true;
-                        Stage("first non-silent audio packet sent");
-                    }
                 }
                 catch (SocketException ex)
                 {
@@ -473,42 +496,51 @@ public sealed class RaopSession : IAsyncDisposable
     /// </summary>
     private async Task SyncLoopAsync(CancellationToken ct)
     {
+        bool first = true;
+        byte[] pkt = new byte[_usePtp ? 28 : 20];
         while (!ct.IsCancellationRequested)
         {
+            uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
+            pkt[0] = first ? (byte)0x90 : (byte)0x80;
+            if (_usePtp)
+            {
+                pkt[1] = 0xD7; // PT 215 time announce
+                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+                ulong clockNs = MonotonicClock.NowNanoseconds;
+                ulong clockId = _ptp!.ClockId;
+                foreach (var peer in _ptpPeers)
+                {
+                    if (_ptp.TryReceiverNow(peer, out ulong theirId, out ulong theirNs))
+                    {
+                        clockNs = theirNs;
+                        clockId = theirId;
+                        break;
+                    }
+                }
+                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), clockNs);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
+                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), clockId);
+            }
+            else
+            {
+                pkt[1] = 0xD4;
+                BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
+                BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
+                BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
+            }
             try
             {
-                await Task.Delay(1000, ct).ConfigureAwait(false);
-                await SendSyncAsync(first: false, ct).ConfigureAwait(false);
+                await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
+                if (first) Stage($"first sync packet sent to {_receiverControl}");
             }
             catch (SocketException ex) { Stage($"sync send failed: {ex.SocketErrorCode}"); }
             catch (OperationCanceledException) { return; }
+            first = false;
+            try { await Task.Delay(1000, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
         }
-    }
-
-    private async Task SendSyncAsync(bool first, CancellationToken ct)
-    {
-        byte[] pkt = new byte[_usePtp ? 28 : 20];
-        uint nowTs = (uint)(_startTimestamp + (ulong)Interlocked.Read(ref _framesSent) * 352);
-        pkt[0] = first ? (byte)0x90 : (byte)0x80;
-        if (_usePtp)
-        {
-            pkt[1] = 0xD7; // PT 215 time announce
-            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0006);
-            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), MonotonicClock.NowNanoseconds);
-            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
-            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(20), _ptp!.ClockId);
-        }
-        else
-        {
-            pkt[1] = 0xD4;
-            BinaryPrimitives.WriteUInt16BigEndian(pkt.AsSpan(2), 0x0007);
-            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
-            BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), _clock.NowNtp);
-            BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs);
-        }
-        await _controlSocket!.SendToAsync(pkt, SocketFlags.None, _receiverControl!, ct).ConfigureAwait(false);
-        if (first) Stage($"first sync packet sent to {_receiverControl}");
     }
 
     private long _timingRequests;
@@ -594,14 +626,7 @@ public sealed class RaopSession : IAsyncDisposable
             {
                 var resp = await _rtsp.RequestAsync(new RtspRequest { Method = "POST", Uri = "/feedback" }, ct)
                     .ConfigureAwait(false);
-                resp.EnsureSuccess("POST /feedback");
                 long n = Interlocked.Increment(ref _feedbackCount);
-                if (n <= 10 || n % 15 == 0)
-                {
-                    Stage($"transport: feedbackStatus={resp.StatusCode} packets={FramesSent} sendErrors={Interlocked.Read(ref _audioSendFailures)}");
-                    if (_ptp is not null)
-                        foreach (var peer in _ptpPeers) Stage($"ptp health: {_ptp.DescribePeer(peer)}");
-                }
                 if (resp.Body.Length > 0 && (n <= 5 || n % 15 == 0))
                 {
                     try
@@ -641,15 +666,14 @@ public sealed class RaopSession : IAsyncDisposable
 
     // ------------------------------------------------------------ event channel
 
-    private async Task StartEventChannelAsync(IPAddress address, int port, CancellationToken ct)
+    private void StartEventChannel(IPAddress address, int port)
     {
         _eventTcp = new TcpClient();
-        await _eventTcp.ConnectAsync(address, port, ct).ConfigureAwait(false);
-        Stage("event channel connected");
         _loops.Add(Task.Run(async () =>
         {
             try
             {
+                await _eventTcp.ConnectAsync(address, port, _cts.Token).ConfigureAwait(false);
                 var stream = _eventTcp.GetStream();
                 var crypto = new ChannelCrypto(_hap!.EventsWriteKey, _hap.EventsReadKey);
                 bool triedSwap = false;
@@ -659,7 +683,7 @@ public sealed class RaopSession : IAsyncDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     int n = await stream.ReadAsync(buf, _cts.Token).ConfigureAwait(false);
-                    if (n == 0) throw new IOException("receiver closed event channel");
+                    if (n == 0) return;
                     raw.Write(buf, 0, n);
                     try
                     {
@@ -696,13 +720,9 @@ public sealed class RaopSession : IAsyncDisposable
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException or CryptographicException)
+            catch (Exception ex) when (ex is SocketException or IOException or ObjectDisposedException)
             {
-                if (!_cts.IsCancellationRequested)
-                {
-                    Stage($"event channel closed: {ex.Message}");
-                    RaiseFaulted(ex);
-                }
+                if (!_cts.IsCancellationRequested) Stage($"event channel closed: {ex.Message}");
             }
         }));
     }
@@ -818,17 +838,9 @@ public sealed class RaopSession : IAsyncDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            // AirPlay 2: an empty plist requests teardown of the whole session.
-            // Check acknowledgement rather than reporting success for any reply.
-            var response = await _rtsp.RequestAsync(new RtspRequest
-            {
-                Method = "TEARDOWN",
-                Uri = RtspUri,
-                Body = BinaryPlist.Write(new Dictionary<string, object?>()),
-                ContentType = "application/x-apple-binary-plist",
-            }, cts.Token).ConfigureAwait(false);
-            response.EnsureSuccess("TEARDOWN");
-            Stage("TEARDOWN acknowledged (200, whole session)");
+            await _rtsp.RequestAsync(new RtspRequest { Method = "TEARDOWN", Uri = RtspUri }, cts.Token)
+                .ConfigureAwait(false);
+            Stage("TEARDOWN sent");
         }
         catch (Exception ex) when (ex is RtspException or IOException or SocketException or OperationCanceledException or ObjectDisposedException)
         {
@@ -878,5 +890,28 @@ public sealed class RaopSession : IAsyncDisposable
                 return string.Join(":", mac.Select(b => b.ToString("X2")));
         }
         return "02:00:00:00:00:01"; // locally-administered fallback
+    }
+
+    /// <summary>
+    /// Process-wide RTP sample clock. A fresh random origin on every RECORD makes
+    /// the second session disagree with the PTP timeline the speaker already latched.
+    /// </summary>
+    private static class SharedRtpClock
+    {
+        private static readonly ulong OriginNs = MonotonicClock.NowNanoseconds;
+        private static readonly uint Origin = (uint)RandomNumberGenerator.GetInt32(1, int.MaxValue);
+
+        public static uint Now()
+        {
+            ulong now = MonotonicClock.NowNanoseconds;
+            // The monotonic clock can step back by about a millisecond between
+            // these two reads. Unsigned subtraction then wraps and the low 32
+            // bits land ~93 minutes ahead (2^64 ns converted at 44100 Hz).
+            ulong elapsed = now >= OriginNs ? now - OriginNs : 0;
+            ulong seconds = elapsed / 1_000_000_000UL;
+            ulong nanos = elapsed % 1_000_000_000UL;
+            ulong samples = seconds * (ulong)SampleRate + nanos * (ulong)SampleRate / 1_000_000_000UL;
+            return unchecked(Origin + (uint)samples);
+        }
     }
 }

@@ -8,6 +8,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using WinPlay.App.ViewModels;
 using WinRT.Interop;
@@ -27,6 +28,10 @@ public sealed partial class FlyoutWindow : Window
 
     private readonly AppWindow _appWindow;
     private bool _suppressDeactivateHide;
+    // A show that never receives foreground (launcher is not the foreground
+    // process) still raises Deactivated. Hide only after the user has actually
+    // focused the card, otherwise the window vanishes before they can see it.
+    private bool _allowDismiss;
 
     public FlyoutWindow(MainViewModel viewModel)
     {
@@ -52,6 +57,14 @@ public sealed partial class FlyoutWindow : Window
             ref cornerPreference, sizeof(int));
 
         Activated += OnActivated;
+        if (Content is UIElement root)
+        {
+            // Arm click-away dismiss only after a real click on the card.
+            // Show/Activate from startup would otherwise count as focus and
+            // the next deactivate would hide the window before it is seen.
+            root.AddHandler(UIElement.PointerPressedEvent,
+                new PointerEventHandler((_, _) => _allowDismiss = true), true);
+        }
         ViewModel.RequestPin = ShowPinDialogAsync;
     }
 
@@ -116,6 +129,7 @@ public sealed partial class FlyoutWindow : Window
     private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
         if (args.WindowActivationState == WindowActivationState.Deactivated
+            && _allowDismiss
             && !_suppressDeactivateHide && _appWindow.IsVisible)
         {
             AnimateAndHide();

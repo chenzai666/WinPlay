@@ -66,6 +66,19 @@ public partial class App : Application
         _tray = new TrayIcon("WinPlay — AirPlay to speakers and TVs", iconPath);
         _tray.LeftClicked += () => dispatcher.TryEnqueue(() => _flyout?.Toggle());
         _tray.MenuBuilder = BuildTrayMenu;
+
+        // The window is the app. A tray-only start looks closed.
+        dispatcher.TryEnqueue(() =>
+        {
+            try
+            {
+                _flyout?.ShowNearTray();
+            }
+            catch (Exception ex)
+            {
+                LogCrash("Show", ex);
+            }
+        });
     }
 
     private const string RepositoryUrl = "https://github.com/chenzai666/WinPlay";

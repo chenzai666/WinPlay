@@ -19,7 +19,7 @@ public static class AirPlayStreamingSettings
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "WinPlay", "streaming-buffer.txt");
 
-    public static Mode Current { get; private set; } = Mode.Low;
+    public static Mode Current { get; private set; } = Mode.RealTime;
 
     public static int LatencyFrames =>
         WinPlay.Core.Raop.RaopSession.FramesForBufferMilliseconds((int)Current);
@@ -28,11 +28,9 @@ public static class AirPlayStreamingSettings
     {
         try
         {
-            if (int.TryParse(File.ReadAllText(Path).Trim(), out int ms))
-            {
-                if (ms == 400) Set(Mode.RealTime);
-                else if (Enum.IsDefined(typeof(Mode), ms)) Current = (Mode)ms;
-            }
+            if (int.TryParse(File.ReadAllText(Path).Trim(), out int ms)
+                && Enum.IsDefined(typeof(Mode), ms))
+                Current = (Mode)ms;
         }
         catch (Exception) { }
     }

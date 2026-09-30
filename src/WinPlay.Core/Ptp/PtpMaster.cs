@@ -86,19 +86,27 @@ public sealed class PtpMaster : IDisposable
     {
         public int RefCount;
         public DateTime LastSeen;
-        public long Received;
-        public long DelayRequests;
-        public long Sent;
-        public long SendFailures;
-        public ulong? AdvertisedMaster;
+        /// <summary>This receiver keeps its own grandmaster. Do not offer it ours.</summary>
+        public bool Follow;
+    }
+
+    private sealed class ReceiverClock
+    {
+        public ushort SyncSequence;
+        public ulong SyncLocalNs;
+        public bool SawSync;
+        public ulong ClockId;
+        public long OffsetNs;
+        public bool Ready;
     }
 
     private readonly Socket _eventSocket;
     private readonly Socket _generalSocket;
     private readonly CancellationTokenSource _cts = new();
     private readonly Dictionary<IPAddress, PeerState> _peers = [];
+    private readonly Dictionary<IPAddress, ReceiverClock> _receiverClocks = [];
+    private readonly HashSet<IPAddress> _followNextSession = [];
     private readonly object _peersLock = new();
-    private readonly SemaphoreSlim _announceRequested = new(0, 1);
     private ushort _announceSeq;
     private ushort _signalingSeq;
     private ushort _syncSeq;
@@ -141,12 +149,14 @@ public sealed class PtpMaster : IDisposable
             }
             else
             {
-                _peers[address] = new PeerState { RefCount = 1, LastSeen = DateTime.UtcNow };
+                _peers[address] = new PeerState
+                {
+                    RefCount = 1,
+                    LastSeen = DateTime.UtcNow,
+                    Follow = _followNextSession.Contains(address),
+                };
             }
         }
-        // Wake the single sender; it retains ownership of the sequence numbers.
-        try { _announceRequested.Release(); }
-        catch (SemaphoreFullException) { /* pending announce includes this peer */ }
         Diagnostic?.Invoke($"ptp: peer {address} added (clock 0x{ClockId:X16})");
     }
 
@@ -157,19 +167,61 @@ public sealed class PtpMaster : IDisposable
             if (!_peers.TryGetValue(address, out var state)) return;
             if (--state.RefCount > 0) return;
             _peers.Remove(address);
+            // A standalone HomePod on audioOS 27 keeps its own grandmaster after
+            // the session ends. The next session has to follow that clock.
+            _followNextSession.Add(address);
         }
         Diagnostic?.Invoke($"ptp: peer {address} removed");
     }
 
-    public string DescribePeer(IPAddress address)
+    public bool WillFollow(IPAddress address)
+    {
+        lock (_peersLock)
+            return _peers.TryGetValue(address, out var state) && state.Follow;
+    }
+
+    public bool HasReceiverClock(IPAddress address)
+    {
+        lock (_peersLock)
+            return _receiverClocks.TryGetValue(address, out var clock) && clock.Ready;
+    }
+
+    /// <summary>Receiver grandmaster time at this instant, after a Follow_Up has been seen.</summary>
+    public bool TryReceiverNow(IPAddress address, out ulong clockId, out ulong theirNowNs)
     {
         lock (_peersLock)
         {
-            if (!_peers.TryGetValue(address, out var state)) return $"{address}: absent";
-            return $"{address}: tx={state.Sent} errors={state.SendFailures} rx={state.Received} "
-                + $"delayReq={state.DelayRequests} lastSeenMs={(DateTime.UtcNow - state.LastSeen).TotalMilliseconds:F0} "
-                + $"advertisedMaster={state.AdvertisedMaster?.ToString("X16") ?? "unknown"}";
+            if (!_peers.TryGetValue(address, out var state) || !state.Follow
+                || !_receiverClocks.TryGetValue(address, out var clock) || !clock.Ready)
+            {
+                clockId = 0;
+                theirNowNs = 0;
+                return false;
+            }
+            clockId = clock.ClockId;
+            ulong local = MonotonicClock.NowNanoseconds;
+            theirNowNs = unchecked(local + (ulong)clock.OffsetNs);
+            return true;
         }
+    }
+
+    /// <summary>Give up following and offer our grandmaster again.</summary>
+    public void AbandonFollow(IPAddress address)
+    {
+        lock (_peersLock)
+        {
+            _followNextSession.Remove(address);
+            if (_peers.TryGetValue(address, out var state))
+                state.Follow = false;
+            if (_receiverClocks.TryGetValue(address, out var clock))
+                clock.Ready = false;
+        }
+        ushort seq = _syncSeq++;
+        SendToPeers(_generalSocket, GeneralPort, BuildAnnounce(ClockId, _announceSeq++));
+        SendToPeers(_generalSocket, GeneralPort, BuildSignaling(ClockId, _signalingSeq++));
+        SendToPeers(_eventSocket, EventPort, BuildSync(ClockId, seq));
+        SendToPeers(_generalSocket, GeneralPort, BuildFollowUp(ClockId, seq, MonotonicClock.Now));
+        Diagnostic?.Invoke($"ptp: stopped following {address}");
     }
 
     // ------------------------------------------------------------ send loops
@@ -180,7 +232,7 @@ public sealed class PtpMaster : IDisposable
         {
             SendToPeers(_generalSocket, GeneralPort, BuildAnnounce(ClockId, _announceSeq++));
             SendToPeers(_generalSocket, GeneralPort, BuildSignaling(ClockId, _signalingSeq++));
-            try { await _announceRequested.WaitAsync(1000, ct).ConfigureAwait(false); }
+            try { await Task.Delay(1000, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
     }
@@ -207,7 +259,7 @@ public sealed class PtpMaster : IDisposable
         lock (_peersLock)
         {
             targets = _peers
-                .Where(p => now - p.Value.LastSeen <= PeerStaleAfter) // reactivated on next receive
+                .Where(p => !p.Value.Follow && now - p.Value.LastSeen <= PeerStaleAfter)
                 .Select(p => p.Key)
                 .ToList();
         }
@@ -216,14 +268,8 @@ public sealed class PtpMaster : IDisposable
             try
             {
                 socket.SendTo(message, new IPEndPoint(address, port));
-                lock (_peersLock)
-                    if (_peers.TryGetValue(address, out var state)) state.Sent++;
             }
-            catch (SocketException)
-            {
-                lock (_peersLock)
-                    if (_peers.TryGetValue(address, out var state)) state.SendFailures++;
-            }
+            catch (SocketException) { }
         }
     }
 
@@ -249,13 +295,7 @@ public sealed class PtpMaster : IDisposable
             lock (_peersLock)
             {
                 if (_peers.TryGetValue(from, out var state))
-                {
                     state.LastSeen = DateTime.UtcNow;
-                    state.Received++;
-                    if ((buf[0] & 0x0F) == 1) state.DelayRequests++;
-                    if ((buf[0] & 0x0F) == 0x0B && r.ReceivedBytes >= 64)
-                        state.AdvertisedMaster = BinaryPrimitives.ReadUInt64BigEndian(buf.AsSpan(53));
-                }
             }
 
             switch (buf[0] & 0x0F)
@@ -265,7 +305,7 @@ public sealed class PtpMaster : IDisposable
                     _generalSocket.SendTo(BuildDelayResp(ClockId, buf.AsSpan(0, r.ReceivedBytes), MonotonicClock.Now),
                         new IPEndPoint(from, GeneralPort));
                     if (Interlocked.Increment(ref _delayReqsAnswered) == 1)
-                        Diagnostic?.Invoke($"ptp: first Delay_Req from {from} received (clock lock unconfirmed)");
+                        Diagnostic?.Invoke($"ptp: first Delay_Req from {from} — receiver is slaving to our clock");
                     break;
                 case 0x02: // PDelay_Req → PDelay_Resp (event) + PDelay_Resp_Follow_Up (general)
                     if (r.ReceivedBytes < 44) break;
@@ -274,8 +314,12 @@ public sealed class PtpMaster : IDisposable
                     _generalSocket.SendTo(BuildPDelayResp(ClockId, 0x0A, buf.AsSpan(0, r.ReceivedBytes)),
                         new IPEndPoint(from, GeneralPort));
                     break;
-                // Announce/Sync/Follow_Up/Signaling from others: ignored. We claim
-                // clockClass 6 (GPS) so every AirPlay device yields BMCA to us.
+                case 0x00: // Sync from a receiver that stayed grandmaster
+                    NoteReceiverSync(from, buf.AsSpan(0, r.ReceivedBytes));
+                    break;
+                case 0x08: // Follow_Up carrying that Sync's timestamp
+                    NoteReceiverFollowUp(from, buf.AsSpan(0, r.ReceivedBytes));
+                    break;
             }
         }
     }
@@ -324,6 +368,70 @@ public sealed class PtpMaster : IDisposable
         BinaryPrimitives.WriteUInt16BigEndian(m.AsSpan(66), 8);
         BinaryPrimitives.WriteUInt64BigEndian(m.AsSpan(68), clockId);
         return m;
+    }
+
+    internal static bool TryReadFollowUp(ReadOnlySpan<byte> message, out ulong clockId,
+        out ushort sequence, out ulong timestampNs)
+    {
+        clockId = 0;
+        sequence = 0;
+        timestampNs = 0;
+        if (message.Length < 44 || (message[0] & 0x0F) != 0x08) return false;
+        clockId = BinaryPrimitives.ReadUInt64BigEndian(message[20..]);
+        sequence = BinaryPrimitives.ReadUInt16BigEndian(message[30..]);
+        timestampNs = ReadPtpTimestampNs(message[34..]);
+        return true;
+    }
+
+    internal static ulong ReadPtpTimestampNs(ReadOnlySpan<byte> timestamp)
+    {
+        ulong seconds = ((ulong)BinaryPrimitives.ReadUInt16BigEndian(timestamp) << 32)
+            | BinaryPrimitives.ReadUInt32BigEndian(timestamp[2..]);
+        uint nanos = BinaryPrimitives.ReadUInt32BigEndian(timestamp[6..]);
+        return seconds * 1_000_000_000UL + nanos;
+    }
+
+    private void NoteReceiverSync(IPAddress from, ReadOnlySpan<byte> message)
+    {
+        if (message.Length < 34) return;
+        lock (_peersLock)
+        {
+            if (!IsTracked(from)) return;
+            var clock = ClockFor(from);
+            clock.SyncSequence = BinaryPrimitives.ReadUInt16BigEndian(message[30..]);
+            clock.SyncLocalNs = MonotonicClock.NowNanoseconds;
+            clock.SawSync = true;
+            clock.ClockId = BinaryPrimitives.ReadUInt64BigEndian(message[20..]);
+        }
+    }
+
+    private void NoteReceiverFollowUp(IPAddress from, ReadOnlySpan<byte> message)
+    {
+        if (!TryReadFollowUp(message, out ulong clockId, out ushort sequence, out ulong theirNs)) return;
+        lock (_peersLock)
+        {
+            if (!IsTracked(from)) return;
+            var clock = ClockFor(from);
+            if (!clock.SawSync || clock.SyncSequence != sequence) return;
+            bool first = !clock.Ready;
+            clock.ClockId = clockId;
+            clock.OffsetNs = unchecked((long)theirNs - (long)clock.SyncLocalNs);
+            clock.Ready = true;
+            clock.SawSync = false;
+            if (!first) return;
+        }
+        Diagnostic?.Invoke($"ptp: following {from} clock 0x{clockId:X16}");
+    }
+
+    private bool IsTracked(IPAddress address) =>
+        _followNextSession.Contains(address)
+        || (_peers.TryGetValue(address, out var state) && state.Follow);
+
+    private ReceiverClock ClockFor(IPAddress address)
+    {
+        if (!_receiverClocks.TryGetValue(address, out var clock))
+            _receiverClocks[address] = clock = new ReceiverClock();
+        return clock;
     }
 
     internal static byte[] BuildSync(ulong clockId, ushort sequence) =>

@@ -124,4 +124,14 @@ public class PtpMasterTests
         ulong now = MonotonicClock.NowNanoseconds;
         Assert.True(now >= recombined && now - recombined < 1_000_000_000UL);
     }
+
+    [Fact]
+    public void FollowUp_TimestampRoundTripsToNanoseconds()
+    {
+        byte[] m = PtpMaster.BuildFollowUp(ClockId, 0x2222, (1234, 567890));
+        Assert.True(PtpMaster.TryReadFollowUp(m, out ulong clockId, out ushort sequence, out ulong timestampNs));
+        Assert.Equal(ClockId, clockId);
+        Assert.Equal(0x2222, sequence);
+        Assert.Equal(1234UL * 1_000_000_000UL + 567890UL, timestampNs);
+    }
 }
