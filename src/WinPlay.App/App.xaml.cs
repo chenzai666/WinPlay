@@ -67,7 +67,10 @@ public partial class App : Application
         _tray.LeftClicked += () => dispatcher.TryEnqueue(() => _flyout?.Toggle());
         _tray.MenuBuilder = BuildTrayMenu;
 
-        // The window is the app. A tray-only start looks closed.
+        // Sign-in already passed --startup. Stay in the tray; a manual open still shows the card.
+        StartupManager.RefreshCommand();
+        if (StartupManager.IsStartupLaunch(args.Arguments)) return;
+
         dispatcher.TryEnqueue(() =>
         {
             try

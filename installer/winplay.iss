@@ -59,7 +59,7 @@ Name: "{userdesktop}\WinPlay"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; \
-  ValueName: "WinPlay"; ValueData: """{app}\{#AppExe}"""; Tasks: startup; Flags: uninsdeletevalue
+  ValueName: "WinPlay"; ValueData: """{app}\{#AppExe}"" --startup"; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch WinPlay"; Flags: nowait postinstall skipifsilent
