@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using WinPlay.Core.Audio;
+using static WinPlay.Core.FileLog;
 using WinPlay.Core.Discovery;
 using WinPlay.Core.Hap;
 
@@ -89,15 +90,10 @@ public sealed class GroupSession : IAsyncDisposable
                 device.Features.HasFlag(AirPlayFeatures.SupportsPtp),
                 credentialStore?.Load(device.DeviceId),
                 FollowReceiverClock: follow));
-            try
-            {
-                device.AirPlayTxt.TryGetValue("osvers", out string? os);
-                if (string.IsNullOrEmpty(os)) device.RaopTxt.TryGetValue("osvers", out os);
-                System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
-                    $"{DateTimeOffset.Now:O} clock-decision {device.Name} model={device.Model} osvers={os ?? ""} follow={(follow ? "receiver" : "local")}{Environment.NewLine}");
-            }
-            catch (Exception) { }
+            device.AirPlayTxt.TryGetValue("osvers", out string? os);
+            if (string.IsNullOrEmpty(os)) device.RaopTxt.TryGetValue("osvers", out os);
+            AppendTemp("winplay-rtp.log",
+                $"{DateTimeOffset.Now:O} clock-decision {device.Name} model={device.Model} osvers={os ?? ""} follow={(follow ? "receiver" : "local")}");
         }
         return members;
     }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using NAudio.CoreAudioApi;
+using WinPlay.Core;
 
 namespace WinPlay.Core.Audio;
 
@@ -128,8 +129,8 @@ public sealed class SystemAudioMover : IDisposable
     {
         try
         {
-            File.AppendAllText(Path.Combine(Path.GetTempPath(), "winplay-volume.log"),
-                DateTime.Now.ToString("HH:mm:ss.fff") + " " + message + Environment.NewLine);
+            FileLog.AppendTemp("winplay-volume.log",
+                DateTime.Now.ToString("HH:mm:ss.fff") + " " + message);
         }
         catch (Exception) { }
     }

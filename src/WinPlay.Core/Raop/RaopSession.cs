@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using WinPlay.Core.Audio;
+using WinPlay.Core;
 using WinPlay.Core.Discovery;
 using WinPlay.Core.Hap;
 using WinPlay.Core.Net;
@@ -381,13 +382,8 @@ public sealed class RaopSession : IAsyncDisposable
     public async Task StartStreamingAsync(IAudioSource source, double volumeDb = -18)
     {
         bool followed = await PrepareReceiverClockAsync(_cts.Token).ConfigureAwait(false);
-        try
-        {
-            System.IO.File.AppendAllText(
-                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
-                $"{DateTimeOffset.Now:O} shared rtp origin {_startTimestamp} latency={_latencyFrames} follow={(followed ? "receiver" : "local")}{Environment.NewLine}");
-        }
-        catch (Exception) { }
+        FileLog.AppendTemp("winplay-rtp.log",
+            $"{DateTimeOffset.Now:O} shared rtp origin {_startTimestamp} latency={_latencyFrames} follow={(followed ? "receiver" : "local")}");
 
         await SetVolumeAsync(volumeDb, _cts.Token).ConfigureAwait(false);
 

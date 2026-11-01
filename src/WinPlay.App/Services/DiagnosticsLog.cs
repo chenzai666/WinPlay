@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Collections.Concurrent;
+using WinPlay.Core;
 
 namespace WinPlay.App.Services;
 
@@ -15,7 +16,7 @@ public sealed class DiagnosticsLog
 
     private readonly ConcurrentQueue<Entry> _entries = new();
     private readonly object _fileGate = new();
-    private readonly bool _writeStartupLog = Environment.GetEnvironmentVariable("WINPLAY_STARTUP_LOG") == "1";
+    private readonly bool _writeStartupLog = FileLog.Enabled;
 
     public event Action<Entry>? EntryAdded;
 

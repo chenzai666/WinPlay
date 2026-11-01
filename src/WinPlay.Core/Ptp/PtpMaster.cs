@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using WinPlay.Core;
 
 namespace WinPlay.Core.Ptp;
 
@@ -489,14 +490,8 @@ public sealed class PtpMaster : IDisposable
 
     private void LogPtp(string line)
     {
-        if (Interlocked.Increment(ref _ptpRxLogs) > 6) return;
-        try
-        {
-            System.IO.File.AppendAllText(
-                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
-                $"{DateTimeOffset.Now:O} {line}{Environment.NewLine}");
-        }
-        catch (Exception) { }
+        if (!FileLog.Enabled || Interlocked.Increment(ref _ptpRxLogs) > 6) return;
+        FileLog.AppendTemp("winplay-rtp.log", $"{DateTimeOffset.Now:O} {line}");
     }
 
     private ReceiverClock ClockFor(IPAddress address)

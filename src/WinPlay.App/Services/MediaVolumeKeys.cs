@@ -155,8 +155,8 @@ public sealed class MediaVolumeKeys : IDisposable
     {
         try
         {
-            File.AppendAllText(Path.Combine(Path.GetTempPath(), "winplay-volume.log"),
-                DateTime.Now.ToString("HH:mm:ss.fff") + " " + message + Environment.NewLine);
+            WinPlay.Core.FileLog.AppendTemp("winplay-volume.log",
+                DateTime.Now.ToString("HH:mm:ss.fff") + " " + message);
         }
         catch (Exception) { }
     }
