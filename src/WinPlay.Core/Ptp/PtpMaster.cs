@@ -188,6 +188,17 @@ public sealed class PtpMaster : IDisposable
             return _receiverClocks.TryGetValue(address, out var clock) && clock.Ready;
     }
 
+    /// <summary>A HomePod often sends PTP from a different address than the AirPlay connection.</summary>
+    public bool HasAnyReceiverClock()
+    {
+        lock (_peersLock)
+        {
+            foreach (var pair in _receiverClocks)
+                if (pair.Value.Ready && IsTracked(pair.Key)) return true;
+            return false;
+        }
+    }
+
     /// <summary>Receiver grandmaster time at this instant, after a Follow_Up has been seen.</summary>
     public bool TryReceiverNow(IPAddress address, out ulong clockId, out ulong theirNowNs)
     {
@@ -205,6 +216,23 @@ public sealed class PtpMaster : IDisposable
             theirNowNs = unchecked(local + (ulong)clock.OffsetNs);
             return true;
         }
+    }
+
+    public bool TryAnyReceiverNow(out ulong clockId, out ulong theirNowNs)
+    {
+        lock (_peersLock)
+        {
+            foreach (var pair in _receiverClocks)
+            {
+                if (!pair.Value.Ready || !IsTracked(pair.Key)) continue;
+                clockId = pair.Value.ClockId;
+                theirNowNs = unchecked(MonotonicClock.NowNanoseconds + (ulong)pair.Value.OffsetNs);
+                return true;
+            }
+        }
+        clockId = 0;
+        theirNowNs = 0;
+        return false;
     }
 
     /// <summary>Give up following and offer our grandmaster again.</summary>
@@ -398,7 +426,7 @@ public sealed class PtpMaster : IDisposable
         if (message.Length < 34) return;
         lock (_peersLock)
         {
-            if (!IsTracked(from)) return;
+            if (!IsTracked(from) && !AdoptSender(from)) return;
             var clock = ClockFor(from);
             clock.SyncSequence = BinaryPrimitives.ReadUInt16BigEndian(message[30..]);
             clock.SyncLocalNs = MonotonicClock.NowNanoseconds;
@@ -412,7 +440,7 @@ public sealed class PtpMaster : IDisposable
         if (!TryReadFollowUp(message, out ulong clockId, out ushort sequence, out ulong theirNs)) return;
         lock (_peersLock)
         {
-            if (!IsTracked(from)) return;
+            if (!IsTracked(from) && !AdoptSender(from)) return;
             var clock = ClockFor(from);
             if (!clock.SawSync || clock.SyncSequence != sequence) return;
             bool first = !clock.Ready;
@@ -428,6 +456,48 @@ public sealed class PtpMaster : IDisposable
     private bool IsTracked(IPAddress address) =>
         _followNextSession.Contains(address)
         || (_peers.TryGetValue(address, out var state) && state.Follow);
+
+    /// <summary>
+    /// Caller holds <see cref="_peersLock"/>. A follow session may see Sync from an address
+    /// other than the AirPlay peer. Count that sender so its clock can anchor playback.
+    /// </summary>
+    private bool AdoptSender(IPAddress from)
+    {
+        bool following = false;
+        foreach (var state in _peers.Values)
+            if (state.Follow) { following = true; break; }
+        if (!following) return false;
+        if (_peers.TryGetValue(from, out var existing))
+        {
+            existing.Follow = true;
+            existing.LastSeen = DateTime.UtcNow;
+        }
+        else
+        {
+            _peers[from] = new PeerState
+            {
+                RefCount = 1,
+                LastSeen = DateTime.UtcNow,
+                Follow = true,
+            };
+        }
+        LogPtp($"ptp-rx sync-from {from} adopted");
+        return true;
+    }
+
+    private int _ptpRxLogs;
+
+    private void LogPtp(string line)
+    {
+        if (Interlocked.Increment(ref _ptpRxLogs) > 6) return;
+        try
+        {
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "winplay-rtp.log"),
+                $"{DateTimeOffset.Now:O} {line}{Environment.NewLine}");
+        }
+        catch (Exception) { }
+    }
 
     private ReceiverClock ClockFor(IPAddress address)
     {

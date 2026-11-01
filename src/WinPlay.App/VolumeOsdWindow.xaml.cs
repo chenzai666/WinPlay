@@ -43,7 +43,10 @@ public sealed partial class VolumeOsdWindow : Window
         DwmSetWindowAttribute(_hwnd, 33, ref corner, sizeof(int));
 
         _appWindow.Resize(new Windows.Graphics.SizeInt32(Width, Height));
-        PlaceOnce();
+        // A WinUI window stays cloaked until AppWindow.Show. SW_SHOWNA then draws nothing
+        // until some other window (the device card) has been shown. Prime it off-screen
+        // so the first volume key after sign-in can appear immediately.
+        PrimeHidden();
 
         _hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
         _hide.Tick += (_, _) =>
@@ -74,12 +77,32 @@ public sealed partial class VolumeOsdWindow : Window
         TipText.Text = muted ? "已静音" : "WinPlay 音量";
 
         if (!_placed) PlaceOnce();
+        int cloak = 0; // Hide() recloaks; SW_SHOWNA does not clear that, so the card stays invisible
+        DwmSetWindowAttribute(_hwnd, 13, ref cloak, sizeof(int));
         ShowWindow(_hwnd, 8); // SW_SHOWNA — visible, does not steal focus
         SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // TOPMOST | NOMOVE | NOSIZE | NOACTIVATE
         _visible = true;
 
         _hide.Stop();
         _hide.Start();
+    }
+
+    private void PrimeHidden()
+    {
+        int cloak = 1;
+        DwmSetWindowAttribute(_hwnd, 13, ref cloak, sizeof(int));
+        SetWindowPos(_hwnd, new IntPtr(-1), -32000, -32000, Width, Height, 0x0010);
+        try
+        {
+            _appWindow.Move(new Windows.Graphics.PointInt32(-32000, -32000));
+            _appWindow.Show();
+            _appWindow.Hide();
+        }
+        catch (Exception) { }
+        cloak = 0;
+        DwmSetWindowAttribute(_hwnd, 13, ref cloak, sizeof(int));
+        _placed = false;
+        PlaceOnce();
     }
 
     private void PlaceOnce()
@@ -89,13 +112,17 @@ public sealed partial class VolumeOsdWindow : Window
         {
             var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
             var work = area.WorkArea;
+            if (work.Width < Width || work.Height < Height) return;
             x = work.X + (work.Width - Width) / 2;
             y = work.Y + work.Height - Height - 100;
         }
         catch (Exception)
         {
-            x = Math.Max(0, (GetSystemMetrics(0) - Width) / 2);
-            y = Math.Max(0, GetSystemMetrics(1) - Height - 100);
+            int screenW = GetSystemMetrics(0);
+            int screenH = GetSystemMetrics(1);
+            if (screenW < Width || screenH < Height) return;
+            x = Math.Max(0, (screenW - Width) / 2);
+            y = Math.Max(0, screenH - Height - 100);
         }
         SetWindowPos(_hwnd, new IntPtr(-1), x, y, Width, Height, 0x0010); // NOACTIVATE
         _appWindow.Move(new Windows.Graphics.PointInt32(x, y));

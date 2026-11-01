@@ -244,7 +244,8 @@ public sealed class RaopSession : IAsyncDisposable
             // clock-slaved (timingPeerInfo.Addresses); group/pair members also need
             // our clock — a partner with no clock stays silent even with relayed audio.
             var timingPeer = ExtractTimingPeer(sessionSetup) ?? _rtsp.RemoteAddress;
-            foreach (var peer in new[] { timingPeer }.Concat(_groupPeers).Distinct())
+            // PTP often arrives from the AirPlay address even when timingPeerInfo lists another one.
+            foreach (var peer in new[] { timingPeer, _rtsp.RemoteAddress }.Concat(_groupPeers).Distinct())
             {
                 _ptpPeers.Add(peer);
                 _ptp!.AddPeer(peer, _followReceiverClock);
@@ -365,10 +366,10 @@ public sealed class RaopSession : IAsyncDisposable
         if (!_usePtp || _ptp is null) return false;
         var followed = _ptpPeers.Where(_ptp.WillFollow).ToList();
         if (followed.Count == 0) return false;
-        var until = DateTime.UtcNow.AddMilliseconds(1500);
+        var until = DateTime.UtcNow.AddMilliseconds(2500);
         while (DateTime.UtcNow < until)
         {
-            if (followed.Any(_ptp.HasReceiverClock)) return true;
+            if (followed.Any(_ptp.HasReceiverClock) || _ptp.HasAnyReceiverClock()) return true;
             try { await Task.Delay(40, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return false; }
         }
@@ -511,14 +512,21 @@ public sealed class RaopSession : IAsyncDisposable
                 BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(4), nowTs - (uint)_latencyFrames);
                 ulong clockNs = MonotonicClock.NowNanoseconds;
                 ulong clockId = _ptp!.ClockId;
+                bool anchored = false;
                 foreach (var peer in _ptpPeers)
                 {
                     if (_ptp.TryReceiverNow(peer, out ulong theirId, out ulong theirNs))
                     {
                         clockNs = theirNs;
                         clockId = theirId;
+                        anchored = true;
                         break;
                     }
+                }
+                if (!anchored && _ptp.TryAnyReceiverNow(out ulong anyId, out ulong anyNs))
+                {
+                    clockNs = anyNs;
+                    clockId = anyId;
                 }
                 BinaryPrimitives.WriteUInt64BigEndian(pkt.AsSpan(8), clockNs);
                 BinaryPrimitives.WriteUInt32BigEndian(pkt.AsSpan(16), nowTs - (uint)Math.Min(11025, _latencyFrames));
