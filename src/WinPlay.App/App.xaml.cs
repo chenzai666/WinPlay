@@ -76,7 +76,8 @@ public partial class App : Application
                         .GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
                     var root = (FrameworkElement)_osd.Content;
                     var resources = Application.Current.Resources.MergedDictionaries
-                        .First(dictionary => dictionary.ThemeDictionaries.ContainsKey("Light"));
+                        .First(dictionary => dictionary.ThemeDictionaries.TryGetValue("Light", out object? light)
+                            && light is ResourceDictionary palette && palette.ContainsKey("AccentBrush"));
                     string key = root.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
                     var palette = (ResourceDictionary)resources.ThemeDictionaries[key];
                     var accent = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette["AccentBrush"]).Color;
