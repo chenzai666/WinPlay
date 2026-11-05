@@ -75,14 +75,20 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
 {
     private DesktopAcrylicController? _controller;
     private XamlRoot? _root;
+    private SystemBackdropConfiguration? _configuration;
+    private (bool Dark, bool HighContrast, int Transparency)? _lastAppearance;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
         base.OnTargetConnected(target, xamlRoot);
         _root = xamlRoot;
-        _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Base };
+        _configuration = new SystemBackdropConfiguration();
+        _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
+        _controller.StateChanged += (_, _) => LogState("state-changed");
         _controller.AddSystemBackdropTarget(target);
         UpdateConfiguration(target, xamlRoot);
+        _controller.SetSystemBackdropConfiguration(_configuration);
+        LogState("connected");
     }
 
     protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
@@ -93,26 +99,52 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
 
     private void UpdateConfiguration(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
-        if (_controller is null) return;
-        var configuration = GetDefaultSystemBackdropConfiguration(target, xamlRoot);
-        // The HUD intentionally shows without input focus. The controller still
-        // respects transparency, high contrast, energy saver and remote-session policy.
-        configuration.IsInputActive = true;
-        _controller.SetSystemBackdropConfiguration(configuration);
+        if (_controller is null || _configuration is null) return;
+        var defaults = GetDefaultSystemBackdropConfiguration(target, xamlRoot);
+        // WinUI owns defaults and rewrites its activation state when a popup hides.
+        // Keep our transient-window policy separate, as required by SystemBackdrop.
+        _configuration.Theme = defaults.Theme;
+        _configuration.IsHighContrast = defaults.IsHighContrast;
+        _configuration.IsInputActive = true;
         Refresh();
+        LogState("configuration-changed");
     }
 
     internal void Refresh()
     {
         if (_controller is null) return;
         bool dark = (_root?.Content as FrameworkElement)?.ActualTheme == ElementTheme.Dark;
-        float clarity = CardMaterialSettings.Transparency / 100.0f;
-        _controller.TintColor = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
-        _controller.TintOpacity = 0.8f - 0.65f * clarity;
-        _controller.LuminosityOpacity = 0.95f - 0.3f * clarity;
-        _controller.FallbackColor = new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast
+        bool highContrast = _configuration?.IsHighContrast == true;
+        var appearance = (dark, highContrast, CardMaterialSettings.Transparency);
+        if (_lastAppearance == appearance) return;
+        _lastAppearance = appearance;
+        var material = AcrylicMaterial.FromTransparency(CardMaterialSettings.Transparency);
+        Color tint = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
+        _controller.TintOpacity = material.TintOpacity;
+        _controller.LuminosityOpacity = material.LuminosityOpacity;
+        _controller.FallbackColor = highContrast
             ? new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Background)
-            : dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
+            : tint;
+        // WinAppSDK 1.7 can leave opacity-only changes unapplied (#10717).
+        // A one-channel nudge commits the material, without replacing its controller.
+        // https://github.com/microsoft/microsoft-ui-xaml/issues/10717
+        Color nudge = tint;
+        nudge.R = (byte)(tint.R == 255 ? 254 : tint.R + 1);
+        _controller.TintColor = nudge;
+        _controller.TintColor = tint;
+        LogState("appearance-changed");
+    }
+
+    private void LogState(string reason)
+    {
+        string? path = Environment.GetEnvironmentVariable("WINPLAY_UI_LOG_PATH");
+        if (string.IsNullOrWhiteSpace(path) || _controller is null) return;
+        try
+        {
+            File.AppendAllText(path, $"{DateTimeOffset.Now:O} {reason} state={_controller.State} theme={_configuration?.Theme} active={_configuration?.IsInputActive} highContrast={_configuration?.IsHighContrast} tint={_controller.TintOpacity:F3} luminosity={_controller.LuminosityOpacity:F3}\n");
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop target)
@@ -124,6 +156,8 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
             _controller = null;
         }
         _root = null;
+        _configuration = null;
+        _lastAppearance = null;
         base.OnTargetDisconnected(target);
     }
 }

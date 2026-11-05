@@ -41,7 +41,7 @@ public sealed partial class FlyoutWindow : Window
         _appWindow.IsShownInSwitchers = false;
 
         var presenter = (OverlappedPresenter)_appWindow.Presenter;
-        presenter.SetBorderAndTitleBar(false, false);
+        presenter.SetBorderAndTitleBar(true, false);
         presenter.IsResizable = false;
         presenter.IsMaximizable = false;
         presenter.IsMinimizable = false;
@@ -51,6 +51,8 @@ public sealed partial class FlyoutWindow : Window
         int cornerPreference = 2; // DWMWCP_ROUND
         DwmSetWindowAttribute(hwnd, 33 /*DWMWA_WINDOW_CORNER_PREFERENCE*/,
             ref cornerPreference, sizeof(int));
+        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE: one system outline, no extra stroke.
+        DwmSetWindowAttribute(hwnd, 34 /*DWMWA_BORDER_COLOR*/, ref borderColor, sizeof(int));
         ApplyMaterial();
 
         Activated += OnActivated;
@@ -298,13 +300,15 @@ public sealed partial class FlyoutWindow : Window
         {
             root.Measure(new Windows.Foundation.Size(BaseWidth, BaseMaxHeight));
             if (root.DesiredSize.Height > 0)
-                height = Math.Min(maxHeight, (int)Math.Ceiling((root.DesiredSize.Height + 8) * scale));
+                height = Math.Min(maxHeight, (int)Math.Ceiling(root.DesiredSize.Height * scale));
         }
 
-        // Bottom-right of the work area = above the taskbar, near the tray corner.
-        int x = work.X + work.Width - width - margin;
-        int y = work.Y + work.Height - height - margin;
-        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+        // Keep the requested client size while allowing DWM its non-client border.
+        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(width, height));
+        var outer = _appWindow.Size;
+        int x = work.X + work.Width - outer.Width - margin;
+        int y = work.Y + work.Height - outer.Height - margin;
+        _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
     }
 
     [DllImport("dwmapi.dll")]

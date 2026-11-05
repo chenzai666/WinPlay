@@ -79,12 +79,22 @@
                     <Border Style="{StaticResource SettingsCardStyle}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="外观" Foreground="{ThemeResource PrimaryTextBrush}" />
-                            <TextBlock Text="选择窗口外观，文字颜色随主题自动调整。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="选择窗口外观。字体颜色可以跟随主题或手动选择。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             <ComboBox x:Name="ThemeSelector" SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="跟随系统" Tag="System" />
                                 <ComboBoxItem Content="浅色" Tag="Light" />
                                 <ComboBoxItem Content="深色" Tag="Dark" />
                             </ComboBox>
+                            <TextBlock Text="字体颜色" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,8,0,0" />
+                            <ComboBox x:Name="TextColorSelector" SelectionChanged="OnTextColorChanged" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="自动（跟随主题）" Tag="auto" />
+                                <ComboBoxItem Content="黑色" Tag="000000" />
+                                <ComboBoxItem Content="深灰" Tag="3A3A3C" />
+                                <ComboBoxItem Content="白色" Tag="F5F5F7" />
+                                <ComboBoxItem Content="粉色" Tag="F4A5B0" />
+                                <ComboBoxItem Content="蓝色" Tag="0A84FF" />
+                            </ComboBox>
+                            <TextBlock Text="高对比度模式使用系统文字颜色。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

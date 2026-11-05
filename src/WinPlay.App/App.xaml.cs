@@ -55,6 +55,7 @@ public partial class App : Application
             return;
         }
 
+        TextColorSettings.Apply();
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _dispatcher = dispatcher;
         _viewModel = new MainViewModel(dispatcher);

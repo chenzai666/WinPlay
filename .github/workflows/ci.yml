@@ -44,6 +44,32 @@ jobs:
           -c Release -r win-x64 --self-contained true
           -p:Platform=x64 -o publish/win-x64
 
+      - name: Write portable file manifest
+        shell: pwsh
+        run: |
+          $publishRoot = (Resolve-Path publish/win-x64).Path
+          $fileManifest = Get-ChildItem -LiteralPath $publishRoot -Recurse -File | ForEach-Object {
+            [PSCustomObject]@{
+              path = [IO.Path]::GetRelativePath($publishRoot, $_.FullName).Replace('\', '/')
+              size = $_.Length
+              sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          }
+          [PSCustomObject]@{
+            sourceCommit = '${{ github.event.pull_request.head.sha || github.sha }}'
+            files = @($fileManifest)
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath publish/win-x64/publish-manifest.json -Encoding utf8
+
+      - name: Upload small UI update package
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinPlay-ui-update-win-x64
+          path: |
+            publish/win-x64/WinPlay.*
+            publish/win-x64/resources.pri
+            publish/win-x64/publish-manifest.json
+          retention-days: 7
+
       - name: Upload portable test build
         uses: actions/upload-artifact@v4
         with:

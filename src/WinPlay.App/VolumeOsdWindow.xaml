@@ -6,11 +6,9 @@
 
     <Grid x:Name="Root" Width="420" Height="64" Background="Transparent">
         <Border
-            CornerRadius="28"
             Padding="16,0"
             Background="Transparent"
-            BorderBrush="{ThemeResource CardBorderBrush}"
-            BorderThickness="1">
+            BorderThickness="0">
             <Grid VerticalAlignment="Center" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

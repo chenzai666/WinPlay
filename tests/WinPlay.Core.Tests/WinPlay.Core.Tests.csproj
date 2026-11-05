@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinPlay.Core\WinPlay.Core.csproj" />
+    <Compile Include="..\..\src\WinPlay.App\Services\AcrylicMaterial.cs" Link="AcrylicMaterial.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -34,7 +34,7 @@ public sealed partial class VolumeOsdWindow : Window
 
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(false, false);
+            presenter.SetBorderAndTitleBar(true, false);
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
             presenter.IsMinimizable = false;
@@ -43,7 +43,7 @@ public sealed partial class VolumeOsdWindow : Window
 
         ApplyMaterial();
 
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
+        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
         // SW_SHOWNA draws nothing until this window has been Activate()'d once.
         // Opening the device card used to be that first activation. Do it off-screen
         // at launch so a sign-in start can show the volume card on the first key.
@@ -66,6 +66,8 @@ public sealed partial class VolumeOsdWindow : Window
             Services.WindowBackdropService.ApplySolid(this);
         int corner = 2; // DWMWCP_ROUND
         DwmSetWindowAttribute(_hwnd, 33, ref corner, sizeof(int));
+        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(_hwnd, 34, ref borderColor, sizeof(int));
     }
 
     public void ShowLevel(string name, double percent)
@@ -204,7 +206,8 @@ public sealed partial class VolumeOsdWindow : Window
     private void PlaceOnce()
     {
         int x, y;
-        int width = PhysicalWidth, height = PhysicalHeight;
+        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
+        int width = _appWindow.Size.Width, height = _appWindow.Size.Height;
         try
         {
             var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);

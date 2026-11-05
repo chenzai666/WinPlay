@@ -6,7 +6,6 @@
     Title="WinPlay">
 
     <Grid Background="Transparent">
-    <Border CornerRadius="18" BorderBrush="{ThemeResource CardBorderBrush}" BorderThickness="1" IsHitTestVisible="False" />
     <Grid x:Name="CardMotion" Padding="16,14,16,12" RowSpacing="8" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

@@ -53,6 +53,15 @@ public sealed partial class HotkeySettingsWindow : Window
         OpacitySlider.IsEnabled = GlassSwitch.IsOn;
         foreach (ComboBoxItem item in ThemeSelector.Items)
             if (item.Tag as string == ThemeService.Current.ToString()) ThemeSelector.SelectedItem = item;
+        string textChoice = CardMaterialSettings.TextHex ?? "auto";
+        foreach (ComboBoxItem item in TextColorSelector.Items)
+            if (item.Tag as string == textChoice) TextColorSelector.SelectedItem = item;
+        if (TextColorSelector.SelectedItem is null)
+        {
+            var custom = new ComboBoxItem { Content = $"自定义 #{textChoice}", Tag = textChoice };
+            TextColorSelector.Items.Add(custom);
+            TextColorSelector.SelectedItem = custom;
+        }
         switch (AirPlayStreamingSettings.Current)
         {
             case AirPlayStreamingSettings.Mode.Low: BufferLow.IsChecked = true; break;
@@ -105,6 +114,13 @@ public sealed partial class HotkeySettingsWindow : Window
         if (_loading || ThemeSelector.SelectedItem is not ComboBoxItem item) return;
         if (Enum.TryParse<ThemeService.ThemeChoice>(item.Tag as string, out var choice))
             ThemeService.Set(choice);
+    }
+
+    private void OnTextColorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || TextColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;
+        CardMaterialSettings.SetTextHex(choice == "auto" ? null : choice);
+        TextColorSettings.Apply();
     }
 
     private void OnBufferChecked(object sender, RoutedEventArgs e)
