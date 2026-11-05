@@ -79,7 +79,7 @@
                     <Border Style="{StaticResource SettingsCardStyle}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="外观" Foreground="{ThemeResource PrimaryTextBrush}" />
-                            <TextBlock Text="选择窗口外观。字体颜色可以跟随主题或手动选择。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="选择窗口外观；字体颜色与强调颜色可以独立调整。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             <ComboBox x:Name="ThemeSelector" SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="跟随系统" Tag="System" />
                                 <ComboBoxItem Content="浅色" Tag="Light" />
@@ -94,6 +94,17 @@
                                 <ComboBoxItem Content="粉色" Tag="F4A5B0" />
                                 <ComboBoxItem Content="蓝色" Tag="0A84FF" />
                             </ComboBox>
+                            <TextBlock Text="字体颜色只影响文字。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="强调颜色" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,8,0,0" />
+                            <ComboBox x:Name="AccentColorSelector" SelectionChanged="OnAccentColorChanged" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="自动（跟随主题）" Tag="auto" />
+                                <ComboBoxItem Content="蓝色" Tag="0A84FF" />
+                                <ComboBoxItem Content="粉色" Tag="F4A5B0" />
+                                <ComboBoxItem Content="紫色" Tag="AF52DE" />
+                                <ComboBoxItem Content="绿色" Tag="34C759" />
+                                <ComboBoxItem Content="橙色" Tag="FF9500" />
+                            </ComboBox>
+                            <TextBlock Text="强调颜色影响设备选中状态、勾号和音量条。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             <TextBlock Text="高对比度模式使用系统文字颜色。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>

@@ -62,6 +62,15 @@ public sealed partial class HotkeySettingsWindow : Window
             TextColorSelector.Items.Add(custom);
             TextColorSelector.SelectedItem = custom;
         }
+        string accentChoice = CardMaterialSettings.AccentHex ?? "auto";
+        foreach (ComboBoxItem item in AccentColorSelector.Items)
+            if (item.Tag as string == accentChoice) AccentColorSelector.SelectedItem = item;
+        if (AccentColorSelector.SelectedItem is null)
+        {
+            var custom = new ComboBoxItem { Content = $"自定义 #{accentChoice}", Tag = accentChoice };
+            AccentColorSelector.Items.Add(custom);
+            AccentColorSelector.SelectedItem = custom;
+        }
         switch (AirPlayStreamingSettings.Current)
         {
             case AirPlayStreamingSettings.Mode.Low: BufferLow.IsChecked = true; break;
@@ -120,6 +129,13 @@ public sealed partial class HotkeySettingsWindow : Window
     {
         if (_loading || TextColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;
         CardMaterialSettings.SetTextHex(choice == "auto" ? null : choice);
+        TextColorSettings.Apply();
+    }
+
+    private void OnAccentColorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || AccentColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;
+        CardMaterialSettings.SetAccentHex(choice);
         TextColorSettings.Apply();
     }
 

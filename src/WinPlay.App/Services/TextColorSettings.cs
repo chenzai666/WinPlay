@@ -5,7 +5,7 @@ using Windows.UI;
 
 namespace WinPlay.App.Services;
 
-/// <summary>保留主题原始颜色，手动选择时统一浅色和深色文字及强调色。</summary>
+/// <summary>文字与强调色分别保存、分别应用；自动模式恢复主题原始颜色。</summary>
 public static class TextColorSettings
 {
     private static readonly Dictionary<SolidColorBrush, Color> Defaults = [];
@@ -13,11 +13,10 @@ public static class TextColorSettings
     public static void Apply()
     {
         if (Application.Current?.Resources is not ResourceDictionary root) return;
-        Color? selected = Parse(CardMaterialSettings.TextHex);
-        ApplyToDictionary(root, selected);
+        ApplyToDictionary(root, Parse(CardMaterialSettings.TextHex), Parse(CardMaterialSettings.AccentHex));
     }
 
-    private static void ApplyToDictionary(ResourceDictionary dictionary, Color? selected)
+    private static void ApplyToDictionary(ResourceDictionary dictionary, Color? text, Color? accent)
     {
         foreach (var entry in dictionary.ThemeDictionaries)
         {
@@ -25,19 +24,27 @@ public static class TextColorSettings
                 (themeName != "Light" && themeName != "Dark") ||
                 entry.Value is not ResourceDictionary theme) continue;
 
-            Update(theme, "PrimaryTextBrush", selected);
-            Update(theme, "SecondaryTextBrush", selected is Color color ? Secondary(color) : null);
-            Update(theme, "AccentBrush", selected);
-            Update(theme, "NavigationSelectedTextBrush", selected);
-            Update(theme, "CheckedCardBrush", selected, preserveAlpha: true);
-            Update(theme, "NavigationSelectedBrush", selected, preserveAlpha: true);
-            Update(theme, "AccentFillColorDefaultBrush", selected);
-            Update(theme, "AccentFillColorSecondaryBrush", selected, preserveAlpha: true);
-            Update(theme, "AccentFillColorTertiaryBrush", selected, preserveAlpha: true);
-            Update(theme, "AccentTextFillColorPrimaryBrush", selected);
+            Color? effectiveText = text;
+            if (text is Color chosen && chosen.R == 0xF4 && chosen.G == 0xA5 && chosen.B == 0xB0)
+            {
+                // Keep the saved pink intact; use a darker rose only for light-theme text.
+                effectiveText = themeName == "Light"
+                    ? Color.FromArgb(255, 0xA3, 0x34, 0x50)
+                    : chosen;
+            }
+            Update(theme, "PrimaryTextBrush", effectiveText);
+            Update(theme, "SecondaryTextBrush", effectiveText);
+            Update(theme, "NavigationSelectedTextBrush", effectiveText);
+            Update(theme, "AccentBrush", accent);
+            Update(theme, "CheckedCardBrush", accent, preserveAlpha: true);
+            Update(theme, "NavigationSelectedBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentFillColorDefaultBrush", accent);
+            Update(theme, "AccentFillColorSecondaryBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentFillColorTertiaryBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentTextFillColorPrimaryBrush", accent);
         }
         foreach (ResourceDictionary merged in dictionary.MergedDictionaries)
-            ApplyToDictionary(merged, selected);
+            ApplyToDictionary(merged, text, accent);
     }
 
     private static void Update(ResourceDictionary theme, string key, Color? color, bool preserveAlpha = false)
@@ -58,11 +65,4 @@ public static class TextColorSettings
         return Color.FromArgb(255, (byte)(value >> 16), (byte)(value >> 8), (byte)value);
     }
 
-    private static Color Secondary(Color color)
-    {
-        double luminance = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
-        double toward = luminance < 0.55 ? 80 : 210;
-        byte Mix(byte channel) => (byte)Math.Clamp(channel + (toward - channel) * 0.55, 0, 255);
-        return Color.FromArgb(255, Mix(color.R), Mix(color.G), Mix(color.B));
-    }
 }
