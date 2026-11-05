@@ -129,6 +129,17 @@ public sealed partial class HotkeySettingsWindow : Window
 
     public void ApplyMaterial() => WindowBackdropService.ApplySettings(this);
 
+    internal void PreviewPage(int page)
+    {
+        switch (page)
+        {
+            case 0: NavGeneral.IsChecked = true; break;
+            case 1: NavAudio.IsChecked = true; break;
+            case 2: NavShortcuts.IsChecked = true; break;
+            case 3: NavAbout.IsChecked = true; break;
+        }
+    }
+
     private void OnTextColorChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || TextColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;

@@ -47,16 +47,17 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        if (Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-theme-ui", StringComparer.Ordinal))
+        bool settingsProbe = Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-settings-ui", StringComparer.Ordinal);
+        if (settingsProbe || Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-theme-ui", StringComparer.Ordinal))
         {
             TextColorSettings.Apply();
             _osd = new VolumeOsdWindow();
             _hotkeys = new HotkeySettingsWindow();
             int step = 0;
-            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(settingsProbe ? 1000 : 700) };
             _materialProbeTimer.Tick += (_, _) =>
             {
-                if (step >= 9)
+                if (step >= (settingsProbe ? 12 : 9))
                 {
                     _materialProbeTimer.Stop();
                     _hotkeys.Close();
@@ -64,9 +65,14 @@ public partial class App : Application
                     Exit();
                     return;
                 }
-                var choice = (ThemeService.ThemeChoice)(step % 3);
+                var choice = (ThemeService.ThemeChoice)(settingsProbe ? step / 4 : step % 3);
                 ThemeService.Preview(choice);
-                if (step % 2 == 0) _hotkeys.Activate();
+                if (settingsProbe)
+                {
+                    _hotkeys.PreviewPage(step % 4);
+                    _hotkeys.Activate();
+                }
+                else if (step % 2 == 0) _hotkeys.Activate();
                 else _hotkeys.AppWindow.Hide();
                 _osd.ShowLevel("WinPlay", 65);
                 string? log = Environment.GetEnvironmentVariable("WINPLAY_UI_LOG_PATH");
@@ -81,7 +87,7 @@ public partial class App : Application
                     string key = root.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
                     var palette = (ResourceDictionary)resources.ThemeDictionaries[key];
                     var accent = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette["AccentBrush"]).Color;
-                    File.AppendAllText(log, $"theme-probe step={step} choice={choice} systemAccent={systemAccent} appliedAccent={accent}\n");
+                    File.AppendAllText(log, $"theme-probe step={step} choice={choice} page={(settingsProbe ? step % 4 : -1)} systemAccent={systemAccent} appliedAccent={accent}\n");
                 }
                 ++step;
             };

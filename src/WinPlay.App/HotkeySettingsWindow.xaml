@@ -80,13 +80,13 @@
                         <StackPanel Spacing="8">
                             <TextBlock Text="外观" Foreground="{ThemeResource PrimaryTextBrush}" />
                             <TextBlock Text="选择窗口外观；字体颜色与强调颜色可以独立调整。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
-                            <ComboBox x:Name="ThemeSelector" SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
+                            <ComboBox x:Name="ThemeSelector" Style="{StaticResource SettingsComboBoxStyle}" SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="跟随系统" Tag="System" />
                                 <ComboBoxItem Content="浅色" Tag="Light" />
                                 <ComboBoxItem Content="深色" Tag="Dark" />
                             </ComboBox>
                             <TextBlock Text="字体颜色" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,8,0,0" />
-                            <ComboBox x:Name="TextColorSelector" SelectionChanged="OnTextColorChanged" HorizontalAlignment="Stretch">
+                            <ComboBox x:Name="TextColorSelector" Style="{StaticResource SettingsComboBoxStyle}" SelectionChanged="OnTextColorChanged" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="自动（跟随主题）" Tag="auto" />
                                 <ComboBoxItem Content="黑色" Tag="000000" />
                                 <ComboBoxItem Content="深灰" Tag="3A3A3C" />
@@ -96,7 +96,7 @@
                             </ComboBox>
                             <TextBlock Text="字体颜色只影响文字。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             <TextBlock Text="强调颜色" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,8,0,0" />
-                            <ComboBox x:Name="AccentColorSelector" SelectionChanged="OnAccentColorChanged" HorizontalAlignment="Stretch">
+                            <ComboBox x:Name="AccentColorSelector" Style="{StaticResource SettingsComboBoxStyle}" SelectionChanged="OnAccentColorChanged" HorizontalAlignment="Stretch">
                                 <ComboBoxItem Content="自动（跟随 Windows 强调色）" Tag="auto" />
                                 <ComboBoxItem Content="蓝色" Tag="0A84FF" />
                                 <ComboBoxItem Content="粉色" Tag="F4A5B0" />
@@ -136,7 +136,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="提高音量" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBox x:Name="UpBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                                <TextBox x:Name="UpBox" Grid.Column="1" Style="{StaticResource SettingsTextBoxStyle}" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
                             </Grid>
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
@@ -144,7 +144,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="降低音量" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBox x:Name="DownBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                                <TextBox x:Name="DownBox" Grid.Column="1" Style="{StaticResource SettingsTextBoxStyle}" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
                             </Grid>
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
@@ -152,15 +152,15 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="静音切换" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBox x:Name="MuteBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                                <TextBox x:Name="MuteBox" Grid.Column="1" Style="{StaticResource SettingsTextBoxStyle}" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
                             </Grid>
                         </StackPanel>
                     </Border>
                     <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{ThemeResource ErrorBrush}" Margin="0,0,0,8" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                        <Button Content="恢复默认" Click="OnReset" />
-                        <Button Content="取消" Click="OnCancel" />
-                        <Button Content="保存" Click="OnSave" Style="{StaticResource AccentButtonStyle}" />
+                        <Button Content="恢复默认" Click="OnReset" Style="{StaticResource SettingsButtonStyle}" />
+                        <Button Content="取消" Click="OnCancel" Style="{StaticResource SettingsButtonStyle}" />
+                        <Button Content="保存" Click="OnSave" Style="{StaticResource SettingsAccentButtonStyle}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -171,8 +171,8 @@
                             <TextBlock x:Name="VersionText" Foreground="{ThemeResource PrimaryTextBrush}" />
                             <TextBlock Text="把 Windows 的声音送到 AirPlay 音箱。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
                             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                                <Button Content="GitHub" Click="OnOpenGitHub" />
-                                <Button Content="反馈问题" Click="OnOpenIssues" />
+                                <Button Content="GitHub" Click="OnOpenGitHub" Style="{StaticResource SettingsButtonStyle}" />
+                                <Button Content="反馈问题" Click="OnOpenIssues" Style="{StaticResource SettingsButtonStyle}" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
