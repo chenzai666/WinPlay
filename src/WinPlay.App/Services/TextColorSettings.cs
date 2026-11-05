@@ -5,64 +5,80 @@ using Windows.UI;
 
 namespace WinPlay.App.Services;
 
-/// <summary>Pushes the chosen text color into the theme brushes the card and settings already use.</summary>
+/// <summary>文字与强调色分别保存、分别应用；自动模式恢复主题原始颜色。</summary>
 public static class TextColorSettings
 {
+    private static readonly Dictionary<SolidColorBrush, Color> Defaults = [];
+    private static readonly Windows.UI.ViewManagement.UISettings SystemColors = new();
+    private static bool _watchingSystemColors;
+
     public static void Apply()
     {
-        if (!TryParse(CardMaterialSettings.TextHex, out Color primary)) return;
-        Set("PrimaryTextBrush", primary);
-        Set("SecondaryTextBrush", Secondary(primary));
-    }
-
-    /// <summary>The color chosen in settings. Volume bar and percent use this; mute stays red.</summary>
-    public static Color Primary =>
-        TryParse(CardMaterialSettings.TextHex, out Color color)
-            ? color
-            : Color.FromArgb(255, 0xF4, 0xA5, 0xB0);
-
-    private static void Set(string key, Color color)
-    {
-        if (Application.Current?.Resources is ResourceDictionary root)
-            Walk(root, key, color);
-    }
-
-    private static void Walk(ResourceDictionary dict, string key, Color color)
-    {
-        foreach (var entry in dict.ThemeDictionaries)
+        if (Application.Current?.Resources is not ResourceDictionary root) return;
+        if (!_watchingSystemColors)
         {
-            if (entry.Value is ResourceDictionary theme
-                && theme.ContainsKey(key)
-                && theme[key] is SolidColorBrush brush)
-                brush.Color = color;
+            var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            if (queue is not null)
+            {
+                _watchingSystemColors = true;
+                SystemColors.ColorValuesChanged += (_, _) => queue.TryEnqueue(Apply);
+            }
         }
-        foreach (ResourceDictionary merged in dict.MergedDictionaries)
-            Walk(merged, key, color);
+        Color accent = Accent;
+        ApplyToDictionary(root, Parse(CardMaterialSettings.TextHex), accent);
+        ThemeService.RefreshMaterials();
     }
 
-    private static Color Secondary(Color color)
+    internal static Color Accent => Parse(CardMaterialSettings.AccentHex)
+        ?? SystemColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+
+    private static void ApplyToDictionary(ResourceDictionary dictionary, Color? text, Color? accent)
     {
-        double y = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
-        double toward = y < 0.55 ? 80 : 210;
-        byte Mix(byte channel) => (byte)Math.Clamp(channel + (toward - channel) * 0.55, 0, 255);
-        return Color.FromArgb(255, Mix(color.R), Mix(color.G), Mix(color.B));
+        foreach (var entry in dictionary.ThemeDictionaries)
+        {
+            if (entry.Key is not string themeName ||
+                (themeName != "Light" && themeName != "Dark") ||
+                entry.Value is not ResourceDictionary theme) continue;
+
+            Color? effectiveText = text;
+            if (text is Color chosen && chosen.R == 0xF4 && chosen.G == 0xA5 && chosen.B == 0xB0)
+            {
+                // Keep the saved pink intact; use a darker rose only for light-theme text.
+                effectiveText = themeName == "Light"
+                    ? Color.FromArgb(255, 0xA3, 0x34, 0x50)
+                    : chosen;
+            }
+            Update(theme, "PrimaryTextBrush", effectiveText);
+            Update(theme, "SecondaryTextBrush", effectiveText);
+            Update(theme, "NavigationSelectedTextBrush", effectiveText);
+            Update(theme, "AccentBrush", accent);
+            Update(theme, "CheckedCardBrush", accent, preserveAlpha: true);
+            Update(theme, "NavigationSelectedBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentFillColorDefaultBrush", accent);
+            Update(theme, "AccentFillColorSecondaryBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentFillColorTertiaryBrush", accent, preserveAlpha: true);
+            Update(theme, "AccentTextFillColorPrimaryBrush", accent);
+        }
+        foreach (ResourceDictionary merged in dictionary.MergedDictionaries)
+            ApplyToDictionary(merged, text, accent);
     }
 
-    private static bool TryParse(string hex, out Color color)
+    private static void Update(ResourceDictionary theme, string key, Color? color, bool preserveAlpha = false)
     {
-        color = default;
-        if (hex.Length != 6) return false;
-        try
-        {
-            color = Color.FromArgb(255,
-                Convert.ToByte(hex[..2], 16),
-                Convert.ToByte(hex.Substring(2, 2), 16),
-                Convert.ToByte(hex.Substring(4, 2), 16));
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        if (!theme.ContainsKey(key) || theme[key] is not SolidColorBrush brush) return;
+        if (!Defaults.ContainsKey(brush)) Defaults.Add(brush, brush.Color);
+        Color original = Defaults[brush];
+        brush.Color = color is Color chosen
+            ? Color.FromArgb(preserveAlpha ? original.A : chosen.A, chosen.R, chosen.G, chosen.B)
+            : original;
     }
+
+    private static Color? Parse(string? hex)
+    {
+        if (hex is null || hex.Length != 6 || !uint.TryParse(hex,
+            System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture,
+            out uint value)) return null;
+        return Color.FromArgb(255, (byte)(value >> 16), (byte)(value >> 8), (byte)value);
+    }
+
 }

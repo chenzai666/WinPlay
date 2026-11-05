@@ -6,10 +6,8 @@
 
     <Grid x:Name="Root" Width="420" Height="64" Background="Transparent">
         <Border
-            CornerRadius="20"
             Padding="16,0"
             Background="Transparent"
-            BorderBrush="Transparent"
             BorderThickness="0">
             <Grid VerticalAlignment="Center" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
@@ -18,7 +16,7 @@
                     <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <FontIcon Glyph="&#xE767;" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                <FontIcon x:Name="VolumeIcon" Glyph="&#xE767;" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
                 <TextBlock
                     x:Name="NameText"
                     Grid.Column="1"
@@ -50,6 +48,9 @@
                     FontSize="14"
                     FontWeight="SemiBold"
                     Text="20%" />
+                <TextBlock x:Name="MutedText" Grid.Column="3" Visibility="Collapsed"
+                           VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Foreground="{ThemeResource MutedBrush}" FontSize="14" FontWeight="SemiBold" Text="静音" />
             </Grid>
         </Border>
         <TextBlock x:Name="TipText" Visibility="Collapsed" Text="WinPlay 音量" />

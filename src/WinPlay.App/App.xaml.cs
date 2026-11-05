@@ -21,6 +21,7 @@ public partial class App : Application
     private VolumeOsdWindow? _osd;
     private HotkeySettingsWindow? _hotkeys;
     private MainViewModel? _viewModel;
+    private DispatcherTimer? _materialProbeTimer;
     private static Mutex? _instanceMutex;
 
     public App()
@@ -46,6 +47,78 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        bool settingsProbe = Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-settings-ui", StringComparer.Ordinal);
+        if (settingsProbe || Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-theme-ui", StringComparer.Ordinal))
+        {
+            TextColorSettings.Apply();
+            _osd = new VolumeOsdWindow();
+            _hotkeys = new HotkeySettingsWindow();
+            int step = 0;
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(settingsProbe ? 1000 : 700) };
+            _materialProbeTimer.Tick += (_, _) =>
+            {
+                if (step >= (settingsProbe ? 12 : 9))
+                {
+                    _materialProbeTimer.Stop();
+                    _hotkeys.Close();
+                    _osd.Close();
+                    Exit();
+                    return;
+                }
+                var choice = (ThemeService.ThemeChoice)(settingsProbe ? step / 4 : step % 3);
+                ThemeService.Preview(choice);
+                if (settingsProbe)
+                {
+                    _hotkeys.PreviewPage(step % 4);
+                    _hotkeys.Activate();
+                }
+                else if (step % 2 == 0) _hotkeys.Activate();
+                else _hotkeys.AppWindow.Hide();
+                _osd.ShowLevel("WinPlay", 65);
+                string? log = Environment.GetEnvironmentVariable("WINPLAY_UI_LOG_PATH");
+                if (!string.IsNullOrWhiteSpace(log))
+                {
+                    var systemAccent = new Windows.UI.ViewManagement.UISettings()
+                        .GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+                    var root = (FrameworkElement)_osd.Content;
+                    var resources = Application.Current.Resources.MergedDictionaries
+                        .First(dictionary => dictionary.ThemeDictionaries.TryGetValue("Light", out object? light)
+                            && light is ResourceDictionary palette && palette.ContainsKey("AccentBrush"));
+                    string key = root.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
+                    var palette = (ResourceDictionary)resources.ThemeDictionaries[key];
+                    var accent = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette["AccentBrush"]).Color;
+                    File.AppendAllText(log, $"theme-probe step={step} choice={choice} page={(settingsProbe ? step % 4 : -1)} systemAccent={systemAccent} appliedAccent={accent}\n");
+                }
+                ++step;
+            };
+            _materialProbeTimer.Start();
+            return;
+        }
+
+        // Finite UI-only probe: exercise the real HUD lifecycle without creating
+        // a streaming view model, tray icon, hotkeys, network sockets or mutex.
+        if (args.Arguments.Trim() == "--diagnose-volume-ui" ||
+            Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-volume-ui", StringComparer.Ordinal))
+        {
+            TextColorSettings.Apply();
+            _osd = new VolumeOsdWindow();
+            int remaining = 3;
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _materialProbeTimer.Tick += (_, _) =>
+            {
+                if (--remaining > 0) _osd.ShowLevel("WinPlay", 65);
+                else
+                {
+                    _materialProbeTimer.Stop();
+                    _osd.Close();
+                    Exit();
+                }
+            };
+            DispatcherQueue.GetForCurrentThread().TryEnqueue(() => _osd.ShowLevel("WinPlay", 65));
+            _materialProbeTimer.Start();
+            return;
+        }
+
         // Single instance: a second WinPlay would fail to bind the PTP grandmaster ports
         // (319/320) and break streaming. If one is already running, exit quietly.
         _instanceMutex = new Mutex(true, @"Local\WinPlay.SingleInstance", out bool createdNew);
@@ -151,11 +224,6 @@ public partial class App : Application
                 {
                     _flyout?.ApplyMaterial();
                     _osd?.ApplyMaterial();
-                };
-                _hotkeys.TextColorChanged = () =>
-                {
-                    if (_flyout is not null) WindowBackdropService.Restore(_flyout);
-                    if (_osd is not null) WindowBackdropService.Restore(_osd);
                 };
                 _hotkeys.Closed += (_, _) =>
                 {

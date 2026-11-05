@@ -4,6 +4,16 @@ All notable changes to WinPlay are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] — 2026-11-05
+
+### 修复与改进
+
+- 修复深浅主题切换闪退、玻璃通透度与音量弹窗多余外框。
+- 字体颜色与强调色独立设置，自动强调色读取 Windows；仅设置页底材跟随强调色。
+- 统一通用、音频、快捷键及关于页面的按钮与半透明控件。
+- 保留原有设备、音频、镜像与快捷键逻辑，增加界面诊断和材质参数回归测试。
+- 安装包与应用版本统一为 0.1.4，修正 ARM64 安装包架构限制并提供发布文件校验清单。
+
 ## [0.1.1] — 2026-08-18
 
 Maintenance release — functionally identical to 0.1.0. The v0.2.0 release has been

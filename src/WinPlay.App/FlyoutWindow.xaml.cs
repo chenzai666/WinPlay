@@ -31,10 +31,6 @@ public sealed partial class FlyoutWindow : Window
     // process) still raises Deactivated. Hide only after the user has actually
     // focused the card, otherwise the window vanishes before they can see it.
     private bool _allowDismiss;
-    // Present rewrites the backdrop type. Repeating that on every open flips the
-    // card between a dark plate and a fully clear window.
-    private bool _glassReady;
-
     public FlyoutWindow(MainViewModel viewModel)
     {
         ViewModel = viewModel;
@@ -45,16 +41,18 @@ public sealed partial class FlyoutWindow : Window
         _appWindow.IsShownInSwitchers = false;
 
         var presenter = (OverlappedPresenter)_appWindow.Presenter;
-        presenter.SetBorderAndTitleBar(false, false);
         presenter.IsResizable = false;
         presenter.IsMaximizable = false;
         presenter.IsMinimizable = false;
         presenter.IsAlwaysOnTop = true;
+        presenter.SetBorderAndTitleBar(true, false);
 
         // Win11 rounded corners for a borderless popup.
         int cornerPreference = 2; // DWMWCP_ROUND
         DwmSetWindowAttribute(hwnd, 33 /*DWMWA_WINDOW_CORNER_PREFERENCE*/,
             ref cornerPreference, sizeof(int));
+        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE: one system outline, no extra stroke.
+        DwmSetWindowAttribute(hwnd, 34 /*DWMWA_BORDER_COLOR*/, ref borderColor, sizeof(int));
         ApplyMaterial();
 
         Activated += OnActivated;
@@ -172,13 +170,7 @@ public sealed partial class FlyoutWindow : Window
         _suppressDeactivateHide = true;
         _appWindow.Show();
         Activate();
-        if (_glassReady)
-            Services.WindowBackdropService.Refresh(this);
-        else
-        {
-            Services.WindowBackdropService.Present(this);
-            _glassReady = true;
-        }
+        Services.WindowBackdropService.Refresh(this);
         _suppressDeactivateHide = false;
         AnimateIn();
     }
@@ -186,6 +178,7 @@ public sealed partial class FlyoutWindow : Window
     public void HideFlyout() => AnimateAndHide();
 
     private bool _closing;
+    private int _animationVersion;
 
     private Visual RootVisual => ElementCompositionPreview.GetElementVisual(CardMotion);
 
@@ -197,8 +190,19 @@ public sealed partial class FlyoutWindow : Window
     /// </summary>
     private void AnimateIn()
     {
+        ++_animationVersion;
         var root = CardMotion;
         var visual = RootVisual;
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            visual.StopAnimation("Opacity");
+            visual.StopAnimation("Offset");
+            visual.StopAnimation("Scale");
+            visual.Opacity = 1;
+            visual.Offset = Vector3.Zero;
+            visual.Scale = Vector3.One;
+            return;
+        }
         var c = visual.Compositor;
         var size = root.ActualSize;
         visual.CenterPoint = new Vector3(size.X / 2f, size.Y, 0f); // grow from the bottom (tray) edge
@@ -214,16 +218,16 @@ public sealed partial class FlyoutWindow : Window
         fade.Duration = dur;
         visual.StartAnimation("Opacity", fade);
 
-        visual.Offset = new Vector3(0f, 44f, 0f);
+        visual.Offset = new Vector3(0f, 12f, 0f);
         var slide = c.CreateVector3KeyFrameAnimation();
-        slide.InsertKeyFrame(0f, new Vector3(0f, 44f, 0f));
+        slide.InsertKeyFrame(0f, new Vector3(0f, 12f, 0f));
         slide.InsertKeyFrame(1f, Vector3.Zero, ease);
         slide.Duration = dur;
         visual.StartAnimation("Offset", slide);
 
-        visual.Scale = new Vector3(0.92f, 0.92f, 1f);
+        visual.Scale = new Vector3(0.98f, 0.98f, 1f);
         var scale = c.CreateVector3KeyFrameAnimation();
-        scale.InsertKeyFrame(0f, new Vector3(0.92f, 0.92f, 1f));
+        scale.InsertKeyFrame(0f, new Vector3(0.98f, 0.98f, 1f));
         scale.InsertKeyFrame(1f, Vector3.One, ease);
         scale.Duration = dur;
         visual.StartAnimation("Scale", scale);
@@ -234,6 +238,12 @@ public sealed partial class FlyoutWindow : Window
     {
         if (_closing) return;
         _closing = true;
+        int version = ++_animationVersion;
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            _appWindow.Hide();
+            return;
+        }
         var visual = RootVisual;
         var c = visual.Compositor;
         var ease = c.CreateCubicBezierEasingFunction(new Vector2(0.4f, 0f), new Vector2(1f, 1f)); // ease-in
@@ -251,7 +261,8 @@ public sealed partial class FlyoutWindow : Window
 
         batch.Completed += (_, _) =>
         {
-            if (_closing) _appWindow.Hide();
+            batch.Dispose();
+            if (_closing && version == _animationVersion) _appWindow.Hide();
         };
         batch.End();
     }
@@ -289,13 +300,15 @@ public sealed partial class FlyoutWindow : Window
         {
             root.Measure(new Windows.Foundation.Size(BaseWidth, BaseMaxHeight));
             if (root.DesiredSize.Height > 0)
-                height = Math.Min(maxHeight, (int)Math.Ceiling((root.DesiredSize.Height + 8) * scale));
+                height = Math.Min(maxHeight, (int)Math.Ceiling(root.DesiredSize.Height * scale));
         }
 
-        // Bottom-right of the work area = above the taskbar, near the tray corner.
-        int x = work.X + work.Width - width - margin;
-        int y = work.Y + work.Height - height - margin;
-        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+        // Keep the requested client size while allowing DWM its non-client border.
+        Services.PopupWindowService.ResizeClient(_appWindow, WindowNative.GetWindowHandle(this), width, height);
+        var outer = _appWindow.Size;
+        int x = work.X + work.Width - outer.Width - margin;
+        int y = work.Y + work.Height - outer.Height - margin;
+        _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
     }
 
     [DllImport("dwmapi.dll")]

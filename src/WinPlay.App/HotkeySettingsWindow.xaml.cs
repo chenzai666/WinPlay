@@ -21,8 +21,6 @@ public sealed partial class HotkeySettingsWindow : Window
 
     public Action? MaterialChanged { get; set; }
 
-    public Action? TextColorChanged { get; set; }
-
     public HotkeySettingsWindow()
     {
         InitializeComponent();
@@ -33,25 +31,46 @@ public sealed partial class HotkeySettingsWindow : Window
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
             presenter.IsMinimizable = false;
-            presenter.IsAlwaysOnTop = true;
+            presenter.IsAlwaysOnTop = false;
         }
         int corner = 2;
         DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
-        WindowBackdropService.ApplySolid(this);
-        ApplySystemAccentTitleBar(hwnd, app);
-        Activated += (_, _) => ApplySystemAccentTitleBar(hwnd, app);
-        app.Resize(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(SettingsTitleBar);
+        ApplyMaterial();
+        double scale = GetDpiForWindow(hwnd) / 96.0;
         var area = DisplayArea.GetFromWindowId(app.Id, DisplayAreaFallback.Primary).WorkArea;
-        app.Move(new Windows.Graphics.PointInt32(
-            area.X + (area.Width - WindowWidth) / 2,
-            area.Y + (area.Height - WindowHeight) / 2));
+        int width = Math.Min(area.Width, (int)Math.Ceiling(WindowWidth * scale));
+        int height = Math.Min(area.Height, (int)Math.Ceiling(WindowHeight * scale));
+        app.MoveAndResize(new Windows.Graphics.RectInt32(
+            area.X + (area.Width - width) / 2,
+            area.Y + (area.Height - height) / 2, width, height));
         LoadBoxes(HotkeySettings.VolumeUp.Text, HotkeySettings.VolumeDown.Text, HotkeySettings.Mute.Text);
         StartupSwitch.IsOn = StartupManager.IsEnabled();
         GlassSwitch.IsOn = CardMaterialSettings.UseGlass;
         OpacitySlider.Value = CardMaterialSettings.Transparency;
         OpacityText.Text = CardMaterialSettings.Transparency.ToString();
         OpacitySlider.IsEnabled = GlassSwitch.IsOn;
-        SelectTextColor(CardMaterialSettings.TextHex);
+        foreach (ComboBoxItem item in ThemeSelector.Items)
+            if (item.Tag as string == ThemeService.Current.ToString()) ThemeSelector.SelectedItem = item;
+        string textChoice = CardMaterialSettings.TextHex ?? "auto";
+        foreach (ComboBoxItem item in TextColorSelector.Items)
+            if (item.Tag as string == textChoice) TextColorSelector.SelectedItem = item;
+        if (TextColorSelector.SelectedItem is null)
+        {
+            var custom = new ComboBoxItem { Content = $"自定义 #{textChoice}", Tag = textChoice };
+            TextColorSelector.Items.Add(custom);
+            TextColorSelector.SelectedItem = custom;
+        }
+        string accentChoice = CardMaterialSettings.AccentHex ?? "auto";
+        foreach (ComboBoxItem item in AccentColorSelector.Items)
+            if (item.Tag as string == accentChoice) AccentColorSelector.SelectedItem = item;
+        if (AccentColorSelector.SelectedItem is null)
+        {
+            var custom = new ComboBoxItem { Content = $"自定义 #{accentChoice}", Tag = accentChoice };
+            AccentColorSelector.Items.Add(custom);
+            AccentColorSelector.SelectedItem = custom;
+        }
         switch (AirPlayStreamingSettings.Current)
         {
             case AirPlayStreamingSettings.Mode.Low: BufferLow.IsChecked = true; break;
@@ -86,6 +105,7 @@ public sealed partial class HotkeySettingsWindow : Window
         if (_loading) return;
         CardMaterialSettings.Set(GlassSwitch.IsOn);
         OpacitySlider.IsEnabled = GlassSwitch.IsOn;
+        ApplyMaterial();
         MaterialChanged?.Invoke();
     }
 
@@ -95,26 +115,43 @@ public sealed partial class HotkeySettingsWindow : Window
         int value = (int)Math.Round(OpacitySlider.Value);
         OpacityText.Text = value.ToString();
         CardMaterialSettings.SetTransparency(value);
+        WindowBackdropService.Refresh(this);
         if (!GlassSwitch.IsOn) return;
         MaterialChanged?.Invoke();
     }
 
-    private void OnTextColorChecked(object sender, RoutedEventArgs e)
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_loading || sender is not RadioButton button || button.IsChecked != true) return;
-        if (button.Tag is not string hex) return;
-        CardMaterialSettings.SetTextHex(hex);
-        TextColorSettings.Apply();
-        TextColorChanged?.Invoke();
+        if (_loading || ThemeSelector.SelectedItem is not ComboBoxItem item) return;
+        if (Enum.TryParse<ThemeService.ThemeChoice>(item.Tag as string, out var choice))
+            ThemeService.Set(choice);
     }
 
-    private void SelectTextColor(string hex)
+    public void ApplyMaterial() => WindowBackdropService.ApplySettings(this);
+
+    internal void PreviewPage(int page)
     {
-        TextBlack.IsChecked = hex == "000000";
-        TextGray.IsChecked = hex == "3A3A3C";
-        TextWhite.IsChecked = hex == "F5F5F7";
-        TextPink.IsChecked = hex == "F4A5B0";
-        TextBlue.IsChecked = hex == "0A84FF";
+        switch (page)
+        {
+            case 0: NavGeneral.IsChecked = true; break;
+            case 1: NavAudio.IsChecked = true; break;
+            case 2: NavShortcuts.IsChecked = true; break;
+            case 3: NavAbout.IsChecked = true; break;
+        }
+    }
+
+    private void OnTextColorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || TextColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;
+        CardMaterialSettings.SetTextHex(choice == "auto" ? null : choice);
+        TextColorSettings.Apply();
+    }
+
+    private void OnAccentColorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || AccentColorSelector.SelectedItem is not ComboBoxItem item || item.Tag is not string choice) return;
+        CardMaterialSettings.SetAccentHex(choice);
+        TextColorSettings.Apply();
     }
 
     private void OnBufferChecked(object sender, RoutedEventArgs e)
@@ -134,63 +171,11 @@ public sealed partial class HotkeySettingsWindow : Window
         catch (Exception) { }
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-
-    /// <summary>
-    /// Windows paints a darkened caption when immersive dark mode is on.
-    /// Use the accent chosen in Settings → Personalization → Colors instead.
-    /// </summary>
-    private static void ApplySystemAccentTitleBar(IntPtr hwnd, AppWindow app)
-    {
-        Windows.UI.Color accent = ReadSystemAccent();
-        double luma = (0.2126 * accent.R + 0.7152 * accent.G + 0.0722 * accent.B) / 255.0;
-        Windows.UI.Color foreground = luma > 0.6
-            ? Windows.UI.Color.FromArgb(255, 0x1C, 0x1C, 0x1E)
-            : Windows.UI.Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
-        int caption = accent.R | (accent.G << 8) | (accent.B << 16);
-        int text = foreground.R | (foreground.G << 8) | (foreground.B << 16);
-        DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int));
-        DwmSetWindowAttribute(hwnd, 36, ref text, sizeof(int));
-
-        AppWindowTitleBar bar = app.TitleBar;
-        Windows.UI.Color hover = Shade(accent, 0.88);
-        Windows.UI.Color pressed = Shade(accent, 0.76);
-        bar.BackgroundColor = accent;
-        bar.InactiveBackgroundColor = accent;
-        bar.ForegroundColor = foreground;
-        bar.InactiveForegroundColor = foreground;
-        bar.ButtonBackgroundColor = accent;
-        bar.ButtonInactiveBackgroundColor = accent;
-        bar.ButtonForegroundColor = foreground;
-        bar.ButtonInactiveForegroundColor = foreground;
-        bar.ButtonHoverBackgroundColor = hover;
-        bar.ButtonHoverForegroundColor = foreground;
-        bar.ButtonPressedBackgroundColor = pressed;
-        bar.ButtonPressedForegroundColor = foreground;
-    }
-
-    private static Windows.UI.Color ReadSystemAccent()
-    {
-        try
-        {
-            using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
-            if (key?.GetValue("AccentColor") is int raw)
-            {
-                uint value = unchecked((uint)raw);
-                return Windows.UI.Color.FromArgb(255, (byte)value, (byte)(value >> 8), (byte)(value >> 16));
-            }
-        }
-        catch (Exception) { }
-        Windows.UI.Color fallback = new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
-        return Windows.UI.Color.FromArgb(255, fallback.R, fallback.G, fallback.B);
-    }
-
-    private static Windows.UI.Color Shade(Windows.UI.Color color, double scale)
-    {
-        static byte Mix(byte channel, double scale) => (byte)Math.Clamp((int)(channel * scale), 0, 255);
-        return Windows.UI.Color.FromArgb(255, Mix(color.R, scale), Mix(color.G, scale), Mix(color.B, scale));
-    }
 
     private void LoadBoxes(string up, string down, string mute)
     {
