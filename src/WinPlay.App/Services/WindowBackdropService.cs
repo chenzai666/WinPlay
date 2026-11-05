@@ -106,10 +106,10 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
     {
         if (_controller is null) return;
         bool dark = (_root?.Content as FrameworkElement)?.ActualTheme == ElementTheme.Dark;
-        double clarity = CardMaterialSettings.Transparency / 100.0;
+        float clarity = CardMaterialSettings.Transparency / 100.0f;
         _controller.TintColor = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
-        _controller.TintOpacity = 0.8 - 0.65 * clarity;
-        _controller.LuminosityOpacity = 0.95 - 0.3 * clarity;
+        _controller.TintOpacity = 0.8f - 0.65f * clarity;
+        _controller.LuminosityOpacity = 0.95f - 0.3f * clarity;
         _controller.FallbackColor = new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast
             ? new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Background)
             : dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
