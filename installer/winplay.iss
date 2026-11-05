@@ -2,10 +2,13 @@
 ; WinPlay installer (Inno Setup). Per-user install — no administrator rights, so Windows
 ; does not show a UAC prompt. Bundles the self-contained build (no .NET prerequisite).
 ;
-; Build:  ISCC.exe /DSourceDir=<publish folder> /DAppVersion=0.1.1 winplay.iss
+; 构建：ISCC.exe /DSourceDir=<发布目录> /DAppVersion=0.1.4 /DAppArchitecture=x64 winplay.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.1.1"
+  #define AppVersion "0.1.4"
+#endif
+#ifndef AppArchitecture
+  #define AppArchitecture "x64"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\publish\win-x64"
@@ -39,8 +42,13 @@ SetupIconFile=..\src\WinPlay.App\Assets\winplay.ico
 ; Per-user install: no admin, no UAC prompt.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+#if AppArchitecture == "ARM64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

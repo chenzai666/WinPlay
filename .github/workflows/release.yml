@@ -64,7 +64,8 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DSourceDir=$(Resolve-Path publish/${{ matrix.rid }})" "/DAppVersion=${{ steps.ver.outputs.version }}" installer/winplay.iss
+          & $iscc "/DSourceDir=$(Resolve-Path publish/${{ matrix.rid }})" "/DAppVersion=${{ steps.ver.outputs.version }}" "/DAppArchitecture=${{ matrix.platform }}" installer/winplay.iss
+          if ($LASTEXITCODE -ne 0) { throw '安装包构建失败' }
           Move-Item installer/dist/WinPlay-*-Setup.exe "WinPlay-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-Setup.exe"
 
       - name: Sign installer
@@ -77,6 +78,23 @@ jobs:
             /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com `
             "WinPlay-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-Setup.exe"
 
+      - name: Write release manifest
+        shell: pwsh
+        run: |
+          $publishRoot = (Resolve-Path 'publish/${{ matrix.rid }}').Path
+          $files = Get-ChildItem -LiteralPath $publishRoot -Recurse -File | Where-Object Extension -ne '.pdb' | ForEach-Object {
+            [PSCustomObject]@{
+              path = [IO.Path]::GetRelativePath($publishRoot, $_.FullName).Replace('\', '/')
+              size = $_.Length
+              sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          }
+          [PSCustomObject]@{
+            version = '${{ steps.ver.outputs.version }}'
+            sourceCommit = '${{ github.sha }}'
+            files = @($files)
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath 'WinPlay-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-manifest.json' -Encoding utf8
+
       - name: Portable zip
         shell: pwsh
         run: Compress-Archive -Path publish/${{ matrix.rid }}/* -DestinationPath "WinPlay-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-portable.zip"
@@ -87,6 +105,7 @@ jobs:
           files: |
             WinPlay-*-${{ matrix.rid }}-Setup.exe
             WinPlay-*-${{ matrix.rid }}-portable.zip
+            WinPlay-*-${{ matrix.rid }}-manifest.json
           # Fixed body (not generate_release_notes) so parallel matrix jobs / re-runs don't
           # append the changelog multiple times.
           body_path: installer/release-notes.md
