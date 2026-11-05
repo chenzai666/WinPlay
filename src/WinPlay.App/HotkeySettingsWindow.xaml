@@ -4,19 +4,35 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="WinPlay 设置">
 
-    <Grid>
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid x:Name="SettingsTitleBar" Grid.Row="0" Background="Transparent" Padding="20,0,150,0">
+            <TextBlock Text="WinPlay 设置" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" />
+        </Grid>
+        <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="200" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Padding="12,16" Background="{ThemeResource CardBackgroundBrush}">
+        <Border Grid.Column="0" Padding="12,16" Background="{ThemeResource SidebarBrush}">
             <StackPanel Spacing="4">
                 <TextBlock Text="设置" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="8,0,0,12" />
-                <RadioButton x:Name="NavGeneral" Content="通用" GroupName="SettingsNav" Checked="OnNavChecked" Tag="general" />
-                <RadioButton x:Name="NavAudio" Content="音频" GroupName="SettingsNav" Checked="OnNavChecked" Tag="audio" />
-                <RadioButton x:Name="NavShortcuts" Content="快捷键" GroupName="SettingsNav" Checked="OnNavChecked" Tag="shortcuts" />
-                <RadioButton x:Name="NavAbout" Content="关于" GroupName="SettingsNav" Checked="OnNavChecked" Tag="about" />
+                <RadioButton x:Name="NavGeneral" Style="{StaticResource SettingsNavigationStyle}" GroupName="SettingsNav" Checked="OnNavChecked" Tag="general">
+                    <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE713;" FontSize="15" /><TextBlock Text="通用" /></StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="NavAudio" Style="{StaticResource SettingsNavigationStyle}" GroupName="SettingsNav" Checked="OnNavChecked" Tag="audio">
+                    <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE767;" FontSize="15" /><TextBlock Text="音频" /></StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="NavShortcuts" Style="{StaticResource SettingsNavigationStyle}" GroupName="SettingsNav" Checked="OnNavChecked" Tag="shortcuts">
+                    <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE765;" FontSize="15" /><TextBlock Text="快捷键" /></StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="NavAbout" Style="{StaticResource SettingsNavigationStyle}" GroupName="SettingsNav" Checked="OnNavChecked" Tag="about">
+                    <StackPanel Orientation="Horizontal" Spacing="12"><FontIcon Glyph="&#xE946;" FontSize="15" /><TextBlock Text="关于" /></StackPanel>
+                </RadioButton>
             </StackPanel>
         </Border>
 
@@ -25,42 +41,50 @@
                 <StackPanel x:Name="GeneralPage" Spacing="4">
                     <TextBlock Text="通用" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,0,0,12" />
                     <Border Style="{StaticResource SettingsCardStyle}">
-                        <Grid>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="登录时启动" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBlock Text="开机后留在托盘，不弹出设备卡片" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                                <TextBlock Text="开机后留在托盘，不弹出设备卡片" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             </StackPanel>
-                            <ToggleSwitch x:Name="StartupSwitch" HorizontalAlignment="Right" Toggled="OnStartupToggled" />
+                            <ToggleSwitch x:Name="StartupSwitch" Grid.Column="1" HorizontalAlignment="Right" OffContent="" OnContent="" Toggled="OnStartupToggled" />
                         </Grid>
                     </Border>
                     <Border Style="{StaticResource SettingsCardStyle}">
-                        <Grid>
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="磨砂玻璃" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBlock Text="背后的画面会被模糊，和终端的亚克力一样" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                                <TextBlock Text="设备面板和音量提示使用 Windows Acrylic 材质" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             </StackPanel>
-                            <ToggleSwitch x:Name="GlassSwitch" HorizontalAlignment="Right" Toggled="OnGlassToggled" />
+                            <ToggleSwitch x:Name="GlassSwitch" Grid.Column="1" HorizontalAlignment="Right" OffContent="" OnContent="" Toggled="OnGlassToggled" />
                         </Grid>
                     </Border>
                     <Border Style="{StaticResource SettingsCardStyle}">
                         <StackPanel Spacing="8">
                             <Grid>
-                                <TextBlock Text="透明度" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBlock Text="玻璃通透度" Foreground="{ThemeResource PrimaryTextBrush}" />
                                 <TextBlock x:Name="OpacityText" HorizontalAlignment="Right" Foreground="{ThemeResource SecondaryTextBrush}" />
                             </Grid>
                             <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="OnOpacityChanged" />
-                            <TextBlock Text="只改变设备卡片和音量条。设置窗口保持不变。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="调整设备面板和音量提示的表面透明度。系统关闭透明效果或启用节能时可能使用纯色。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource SettingsCardStyle}">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="字体颜色" Foreground="{ThemeResource PrimaryTextBrush}" />
-                            <TextBlock Text="壁纸变了就换一个看得清的。设备卡片、音量条和这里的字一起变。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
-                            <RadioButton x:Name="TextBlack" GroupName="TextColor" Tag="000000" Content="黑色" Checked="OnTextColorChecked" />
-                            <RadioButton x:Name="TextGray" GroupName="TextColor" Tag="3A3A3C" Content="深灰" Checked="OnTextColorChecked" />
-                            <RadioButton x:Name="TextWhite" GroupName="TextColor" Tag="F5F5F7" Content="白色" Checked="OnTextColorChecked" />
-                            <RadioButton x:Name="TextPink" GroupName="TextColor" Tag="F4A5B0" Content="粉色" Checked="OnTextColorChecked" />
-                            <RadioButton x:Name="TextBlue" GroupName="TextColor" Tag="0A84FF" Content="蓝色" Checked="OnTextColorChecked" />
+                            <TextBlock Text="外观" Foreground="{ThemeResource PrimaryTextBrush}" />
+                            <TextBlock Text="选择窗口外观，文字颜色随主题自动调整。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <ComboBox x:Name="ThemeSelector" SelectionChanged="OnThemeChanged" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="跟随系统" Tag="System" />
+                                <ComboBoxItem Content="浅色" Tag="Light" />
+                                <ComboBoxItem Content="深色" Tag="Dark" />
+                            </ComboBox>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -111,7 +135,7 @@
                             </Grid>
                         </StackPanel>
                     </Border>
-                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="#F87171" Margin="0,0,0,8" />
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="{ThemeResource ErrorBrush}" Margin="0,0,0,8" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                         <Button Content="恢复默认" Click="OnReset" />
                         <Button Content="取消" Click="OnCancel" />
@@ -134,5 +158,6 @@
                 </StackPanel>
             </Grid>
         </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>

@@ -5,9 +5,15 @@
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="WindowSurfaceBrush" Color="#00000000" />
-            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#24FFFFFF" />
-            <SolidColorBrush x:Key="CardBorderBrush" Color="#55FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#38FFFFFF" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#18000000" />
             <SolidColorBrush x:Key="CheckedCardBrush" Color="#66007AFF" />
+            <SolidColorBrush x:Key="CardHoverBrush" Color="#26FFFFFF" />
+            <SolidColorBrush x:Key="NavigationSelectedBrush" Color="#24007AFF" />
+            <SolidColorBrush x:Key="NavigationSelectedTextBrush" Color="#FF1C1C1E" />
+            <SolidColorBrush x:Key="SidebarBrush" Color="#24FFFFFF" />
+            <SolidColorBrush x:Key="ErrorBrush" Color="#FFC42B1C" />
+            <SolidColorBrush x:Key="MutedBrush" Color="#FFC42B1C" />
             <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FF1C1C1E" />
             <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FF3A3A3C" />
             <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
@@ -19,11 +25,34 @@
             <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1FFFFFFF" />
             <SolidColorBrush x:Key="CardBorderBrush" Color="#40FFFFFF" />
             <SolidColorBrush x:Key="CheckedCardBrush" Color="#660A84FF" />
+            <SolidColorBrush x:Key="CardHoverBrush" Color="#26FFFFFF" />
+            <SolidColorBrush x:Key="NavigationSelectedBrush" Color="#400A84FF" />
+            <SolidColorBrush x:Key="NavigationSelectedTextBrush" Color="#FFF5F5F7" />
+            <SolidColorBrush x:Key="SidebarBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="ErrorBrush" Color="#FFF87171" />
+            <SolidColorBrush x:Key="MutedBrush" Color="#FFF87171" />
             <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FFF5F5F7" />
             <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FFC7C7CC" />
             <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
             <SolidColorBrush x:Key="AccentBrush" Color="#FF0A84FF" />
             <SolidColorBrush x:Key="SliderTrackBrush" Color="#33FFFFFF" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="WindowSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="CheckedCardBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardHoverBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="NavigationSelectedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="NavigationSelectedTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+            <SolidColorBrush x:Key="SidebarBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="ErrorBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="MutedBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
+            <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="SliderTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

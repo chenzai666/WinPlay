@@ -55,7 +55,6 @@ public partial class App : Application
             return;
         }
 
-        TextColorSettings.Apply();
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _dispatcher = dispatcher;
         _viewModel = new MainViewModel(dispatcher);
@@ -151,11 +150,6 @@ public partial class App : Application
                 {
                     _flyout?.ApplyMaterial();
                     _osd?.ApplyMaterial();
-                };
-                _hotkeys.TextColorChanged = () =>
-                {
-                    if (_flyout is not null) WindowBackdropService.Restore(_flyout);
-                    if (_osd is not null) WindowBackdropService.Restore(_osd);
                 };
                 _hotkeys.Closed += (_, _) =>
                 {

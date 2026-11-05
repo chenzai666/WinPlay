@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Hosting;
 using WinRT.Interop;
 
 namespace WinPlay.App;
 
 /// <summary>
-/// TuneBlade-style OSD: fixed dark card, green percent, bar that snaps (no animation).
+/// Theme-aware acrylic HUD; volume updates immediately and the surface fades without taking focus.
 /// </summary>
 public sealed partial class VolumeOsdWindow : Window
 {
@@ -21,7 +21,7 @@ public sealed partial class VolumeOsdWindow : Window
     private bool _placed;
     private bool _visible;
     private bool _islandReady;
-    private bool _glassReady;
+    private int _fadeVersion;
 
     public VolumeOsdWindow()
     {
@@ -43,7 +43,7 @@ public sealed partial class VolumeOsdWindow : Window
 
         ApplyMaterial();
 
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(Width, Height));
+        _appWindow.Resize(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
         // SW_SHOWNA draws nothing until this window has been Activate()'d once.
         // Opening the device card used to be that first activation. Do it off-screen
         // at launch so a sign-in start can show the volume card on the first key.
@@ -53,11 +53,7 @@ public sealed partial class VolumeOsdWindow : Window
         _hide.Tick += (_, _) =>
         {
             _hide.Stop();
-            if (_visible)
-            {
-                _appWindow.Hide();
-                _visible = false;
-            }
+            if (_visible) FadeOut();
         };
     }
 
@@ -77,36 +73,68 @@ public sealed partial class VolumeOsdWindow : Window
         percent = Math.Clamp(percent, 0, 100);
         bool muted = percent <= 0.5;
         NameText.Text = string.IsNullOrWhiteSpace(name) ? "WinPlay" : name;
-        PercentText.Text = muted ? "静音" : $"{percent:0}%";
-        var fill = muted
-            ? Windows.UI.Color.FromArgb(255, 0xF8, 0x71, 0x71)
-            : Services.TextColorSettings.Primary;
-        PercentText.Foreground = new SolidColorBrush(fill);
-        BarFill.Background = new SolidColorBrush(fill);
+        PercentText.Text = $"{percent:0}%";
+        PercentText.Visibility = muted ? Visibility.Collapsed : Visibility.Visible;
+        MutedText.Visibility = muted ? Visibility.Visible : Visibility.Collapsed;
+        VolumeIcon.Glyph = muted ? "\uE74F" : "\uE767";
         BarFill.Width = muted ? 0 : BarWidth * (percent / 100.0);
         TipText.Text = muted ? "已静音" : "WinPlay 音量";
 
-        if (!_placed) PlaceOnce();
+        if (!_visible || !_placed) PlaceOnce();
         if (!_islandReady) AttachIsland();
         int cloak = 0; // Hide() recloaks; SW_SHOWNA does not clear that
         DwmSetWindowAttribute(_hwnd, 13, ref cloak, sizeof(int));
         _appWindow.Show();
         ShowWindow(_hwnd, 8); // SW_SHOWNA — visible, does not steal focus
         SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // TOPMOST | NOMOVE | NOSIZE | NOACTIVATE
-        // Present rewrites the backdrop. Doing that on every key press drops the veil
-        // and the popup no longer matches the transparency slider.
-        if (_glassReady)
-            Services.WindowBackdropService.Refresh(this);
-        else
-        {
-            Services.WindowBackdropService.Present(this);
-            _glassReady = true;
-        }
+        Services.WindowBackdropService.Refresh(this);
+        bool firstShow = !_visible;
         _visible = true;
+        ++_fadeVersion; // cancel a pending fade-out before updating the existing HUD
+        var visual = ElementCompositionPreview.GetElementVisual(Root);
+        visual.StopAnimation("Opacity");
+        visual.Opacity = 1;
+        if (firstShow && new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            var fade = visual.Compositor.CreateScalarKeyFrameAnimation();
+            fade.InsertKeyFrame(0, 0);
+            fade.InsertKeyFrame(1, 1);
+            fade.Duration = TimeSpan.FromMilliseconds(150);
+            visual.StartAnimation("Opacity", fade);
+        }
 
         _hide.Stop();
         _hide.Start();
     }
+
+    private void FadeOut()
+    {
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            _appWindow.Hide();
+            _visible = false;
+            return;
+        }
+        int version = ++_fadeVersion;
+        var visual = ElementCompositionPreview.GetElementVisual(Root);
+        var batch = visual.Compositor.CreateScopedBatch(Microsoft.UI.Composition.CompositionBatchTypes.Animation);
+        var fade = visual.Compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(1, 0);
+        fade.Duration = TimeSpan.FromMilliseconds(150);
+        visual.StartAnimation("Opacity", fade);
+        batch.Completed += (_, _) =>
+        {
+            batch.Dispose();
+            if (version != _fadeVersion) return;
+            _appWindow.Hide();
+            _visible = false;
+        };
+        batch.End();
+    }
+
+    private double Scale => GetDpiForWindow(_hwnd) / 96.0;
+    private int PhysicalWidth => (int)Math.Ceiling(Width * Scale);
+    private int PhysicalHeight => (int)Math.Ceiling(Height * Scale);
 
     private int _primeAttempts;
 
@@ -116,7 +144,7 @@ public sealed partial class VolumeOsdWindow : Window
         _primeAttempts++;
         int ex = GetWindowLong(_hwnd, -20);
         SetWindowLong(_hwnd, -20, ex & ~0x08000000); // Activate cannot attach XAML while NOACTIVATE is set
-        SetWindowPos(_hwnd, new IntPtr(-1), -32000, -32000, Width, Height, 0x0010);
+        SetWindowPos(_hwnd, new IntPtr(-1), -32000, -32000, PhysicalWidth, PhysicalHeight, 0x0010);
         try
         {
             _appWindow.Move(new Windows.Graphics.PointInt32(-32000, -32000));
@@ -176,26 +204,30 @@ public sealed partial class VolumeOsdWindow : Window
     private void PlaceOnce()
     {
         int x, y;
+        int width = PhysicalWidth, height = PhysicalHeight;
         try
         {
             var area = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
             var work = area.WorkArea;
-            if (work.Width < Width || work.Height < Height) return;
-            x = work.X + (work.Width - Width) / 2;
-            y = work.Y + work.Height - Height - 100;
+            if (work.Width < width || work.Height < height) return;
+            x = work.X + (work.Width - width) / 2;
+            y = work.Y + work.Height - height - (int)(100 * Scale);
         }
         catch (Exception)
         {
             int screenW = GetSystemMetrics(0);
             int screenH = GetSystemMetrics(1);
-            if (screenW < Width || screenH < Height) return;
-            x = Math.Max(0, (screenW - Width) / 2);
-            y = Math.Max(0, screenH - Height - 100);
+            if (screenW < width || screenH < height) return;
+            x = Math.Max(0, (screenW - width) / 2);
+            y = Math.Max(0, screenH - height - (int)(100 * Scale));
         }
-        SetWindowPos(_hwnd, new IntPtr(-1), x, y, Width, Height, 0x0010); // NOACTIVATE
-        _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
+        SetWindowPos(_hwnd, new IntPtr(-1), x, y, width, height, 0x0010); // NOACTIVATE
+        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
         _placed = true;
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
