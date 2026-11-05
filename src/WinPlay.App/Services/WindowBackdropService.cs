@@ -129,9 +129,12 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         var appearance = (dark, highContrast, CardMaterialSettings.Transparency, accent);
         if (_lastAppearance == appearance) return;
         _lastAppearance = appearance;
-        var material = AcrylicMaterial.FromTransparency(CardMaterialSettings.Transparency);
+        var material = UsesAccentTint
+            ? AcrylicMaterial.ForSettings(CardMaterialSettings.Transparency, dark)
+            : AcrylicMaterial.FromTransparency(CardMaterialSettings.Transparency);
         Color neutral = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
-        byte Mix(byte background, byte foreground) => (byte)Math.Round(background * 0.35 + foreground * 0.65);
+        double accentWeight = dark ? 0.25 : 0.65;
+        byte Mix(byte background, byte foreground) => (byte)Math.Round(background * (1 - accentWeight) + foreground * accentWeight);
         Color tint = UsesAccentTint
             ? Color.FromArgb(255, Mix(neutral.R, accent.R), Mix(neutral.G, accent.G), Mix(neutral.B, accent.B))
             : neutral;

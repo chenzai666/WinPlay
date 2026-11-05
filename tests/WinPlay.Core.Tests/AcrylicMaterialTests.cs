@@ -33,4 +33,21 @@ public class AcrylicMaterialTests
             previous = current;
         }
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(50)]
+    [InlineData(90)]
+    [InlineData(100)]
+    public void DarkSettingsKeepReadableLuminosityWithoutChangingPopupMapping(int setting)
+    {
+        var popup = AcrylicMaterial.FromTransparency(setting);
+        var lightSettings = AcrylicMaterial.ForSettings(setting, dark: false);
+        var darkSettings = AcrylicMaterial.ForSettings(setting, dark: true);
+
+        Assert.Equal(popup, lightSettings);
+        Assert.Equal(popup.TintOpacity, darkSettings.TintOpacity);
+        Assert.InRange(darkSettings.LuminosityOpacity, 0.75f, 0.9f);
+        Assert.InRange(popup.LuminosityOpacity, 0f, 0.2f);
+    }
 }

@@ -9,4 +9,12 @@ internal readonly record struct AcrylicMaterial(float TintOpacity, float Luminos
         float opacity = 1f - Math.Clamp(transparency, 0, 100) / 100f;
         return new AcrylicMaterial(opacity, 0.2f * opacity);
     }
+
+    public static AcrylicMaterial ForSettings(int transparency, bool dark)
+    {
+        var material = FromTransparency(transparency);
+        // Settings contain long-form text. Preserve a dark luminosity base in
+        // dark mode so a bright desktop cannot wash out light-colored text.
+        return dark ? material with { LuminosityOpacity = 0.75f + 0.15f * material.TintOpacity } : material;
+    }
 }
