@@ -3,7 +3,6 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,13 +31,14 @@ public sealed partial class FlyoutWindow : Window
     // process) still raises Deactivated. Hide only after the user has actually
     // focused the card, otherwise the window vanishes before they can see it.
     private bool _allowDismiss;
+    // Present rewrites the backdrop type. Repeating that on every open flips the
+    // card between a dark plate and a fully clear window.
+    private bool _glassReady;
 
     public FlyoutWindow(MainViewModel viewModel)
     {
         ViewModel = viewModel;
         InitializeComponent();
-
-        SystemBackdrop = new DesktopAcrylicBackdrop();
 
         IntPtr hwnd = WindowNative.GetWindowHandle(this);
         _appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
@@ -55,8 +55,14 @@ public sealed partial class FlyoutWindow : Window
         int cornerPreference = 2; // DWMWCP_ROUND
         DwmSetWindowAttribute(hwnd, 33 /*DWMWA_WINDOW_CORNER_PREFERENCE*/,
             ref cornerPreference, sizeof(int));
+        ApplyMaterial();
 
         Activated += OnActivated;
+        if (Content is FrameworkElement sized)
+            sized.SizeChanged += (_, _) =>
+            {
+                if (!_placing) PositionNearTray();
+            };
         if (Content is UIElement root)
         {
             // Arm click-away dismiss only after a real click on the card.
@@ -66,6 +72,19 @@ public sealed partial class FlyoutWindow : Window
                 new PointerEventHandler((_, _) => _allowDismiss = true), true);
         }
         ViewModel.RequestPin = ShowPinDialogAsync;
+    }
+
+    public Action? OpenSettings { get; set; }
+
+    private void OnOpenSettings(object sender, RoutedEventArgs e) => OpenSettings?.Invoke();
+
+    /// <summary>Thin acrylic, or a solid card when frosted glass is turned off.</summary>
+    public void ApplyMaterial()
+    {
+        if (Services.CardMaterialSettings.UseGlass)
+            Services.WindowBackdropService.ApplyAcrylic(this);
+        else
+            Services.WindowBackdropService.ApplySolid(this);
     }
 
     /// <summary>
@@ -128,6 +147,7 @@ public sealed partial class FlyoutWindow : Window
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
+        Services.WindowBackdropService.Refresh(this);
         if (args.WindowActivationState == WindowActivationState.Deactivated
             && _allowDismiss
             && !_suppressDeactivateHide && _appWindow.IsVisible)
@@ -152,6 +172,13 @@ public sealed partial class FlyoutWindow : Window
         _suppressDeactivateHide = true;
         _appWindow.Show();
         Activate();
+        if (_glassReady)
+            Services.WindowBackdropService.Refresh(this);
+        else
+        {
+            Services.WindowBackdropService.Present(this);
+            _glassReady = true;
+        }
         _suppressDeactivateHide = false;
         AnimateIn();
     }
@@ -160,7 +187,7 @@ public sealed partial class FlyoutWindow : Window
 
     private bool _closing;
 
-    private Visual RootVisual => ElementCompositionPreview.GetElementVisual((UIElement)Content);
+    private Visual RootVisual => ElementCompositionPreview.GetElementVisual(CardMotion);
 
     /// <summary>
     /// Smooth, continuous fade + slide-up + subtle grow of the whole card, one ease-out
@@ -170,7 +197,7 @@ public sealed partial class FlyoutWindow : Window
     /// </summary>
     private void AnimateIn()
     {
-        var root = (UIElement)Content;
+        var root = CardMotion;
         var visual = RootVisual;
         var c = visual.Compositor;
         var size = root.ActualSize;
@@ -178,7 +205,7 @@ public sealed partial class FlyoutWindow : Window
 
         // Windows-flyout-like ease-out: fast start, gentle deceleration, no overshoot.
         var ease = c.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1f));
-        var dur = TimeSpan.FromMilliseconds(300);
+        var dur = TimeSpan.FromMilliseconds(180);
 
         visual.Opacity = 0f;
         var fade = c.CreateScalarKeyFrameAnimation();
@@ -210,7 +237,7 @@ public sealed partial class FlyoutWindow : Window
         var visual = RootVisual;
         var c = visual.Compositor;
         var ease = c.CreateCubicBezierEasingFunction(new Vector2(0.4f, 0f), new Vector2(1f, 1f)); // ease-in
-        var dur = TimeSpan.FromMilliseconds(130);
+        var dur = TimeSpan.FromMilliseconds(150);
 
         var batch = c.CreateScopedBatch(CompositionBatchTypes.Animation);
 
@@ -229,7 +256,23 @@ public sealed partial class FlyoutWindow : Window
         batch.End();
     }
 
+    private bool _placing;
+
     private void PositionNearTray()
+    {
+        if (_placing) return;
+        _placing = true;
+        try
+        {
+            PlaceNearTray();
+        }
+        finally
+        {
+            _placing = false;
+        }
+    }
+
+    private void PlaceNearTray()
     {
         var display = DisplayArea.GetFromWindowId(_appWindow.Id, DisplayAreaFallback.Primary);
         var work = display.WorkArea;
@@ -239,10 +282,15 @@ public sealed partial class FlyoutWindow : Window
         int maxHeight = (int)(BaseMaxHeight * scale);
         int margin = (int)(12 * scale);
 
-        // Content-sized height: measure the root element, clamp to max.
+        // Size to the content. ActualHeight follows the window, so a star row
+        // never shrinks and leaves a tall gray slab with a seam across it.
         int height = maxHeight;
-        if (Content is FrameworkElement root && root.ActualHeight > 0)
-            height = Math.Min(maxHeight, (int)((root.ActualHeight + 8) * scale));
+        if (Content is FrameworkElement root)
+        {
+            root.Measure(new Windows.Foundation.Size(BaseWidth, BaseMaxHeight));
+            if (root.DesiredSize.Height > 0)
+                height = Math.Min(maxHeight, (int)Math.Ceiling((root.DesiredSize.Height + 8) * scale));
+        }
 
         // Bottom-right of the work area = above the taskbar, near the tray corner.
         int x = work.X + work.Width - width - margin;

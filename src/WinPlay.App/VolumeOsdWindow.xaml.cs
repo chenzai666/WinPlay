@@ -11,9 +11,9 @@ namespace WinPlay.App;
 /// </summary>
 public sealed partial class VolumeOsdWindow : Window
 {
-    private const int Width = 340;
-    private const int Height = 118;
-    private const int BarWidth = 300;
+    private const int Width = 420;
+    private const int Height = 64;
+    private const int BarWidth = 220;
 
     private readonly AppWindow _appWindow;
     private readonly DispatcherTimer _hide;
@@ -21,6 +21,7 @@ public sealed partial class VolumeOsdWindow : Window
     private bool _placed;
     private bool _visible;
     private bool _islandReady;
+    private bool _glassReady;
 
     public VolumeOsdWindow()
     {
@@ -40,8 +41,7 @@ public sealed partial class VolumeOsdWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        int corner = 1; // DWMWCP_DONOTROUND — flat card, like the TuneBlade popup
-        DwmSetWindowAttribute(_hwnd, 33, ref corner, sizeof(int));
+        ApplyMaterial();
 
         _appWindow.Resize(new Windows.Graphics.SizeInt32(Width, Height));
         // SW_SHOWNA draws nothing until this window has been Activate()'d once.
@@ -61,18 +61,27 @@ public sealed partial class VolumeOsdWindow : Window
         };
     }
 
+    /// <summary>System acrylic, or a solid card when frosted glass is turned off.</summary>
+    public void ApplyMaterial()
+    {
+        if (Services.CardMaterialSettings.UseGlass)
+            Services.WindowBackdropService.ApplyAcrylic(this);
+        else
+            Services.WindowBackdropService.ApplySolid(this);
+        int corner = 2; // DWMWCP_ROUND
+        DwmSetWindowAttribute(_hwnd, 33, ref corner, sizeof(int));
+    }
+
     public void ShowLevel(string name, double percent)
     {
         percent = Math.Clamp(percent, 0, 100);
         bool muted = percent <= 0.5;
         NameText.Text = string.IsNullOrWhiteSpace(name) ? "WinPlay" : name;
         PercentText.Text = muted ? "静音" : $"{percent:0}%";
-        PercentText.Foreground = new SolidColorBrush(muted
-            ? Windows.UI.Color.FromArgb(255, 0xF8, 0x71, 0x71)
-            : Windows.UI.Color.FromArgb(255, 0x4A, 0xDE, 0x80));
         var fill = muted
             ? Windows.UI.Color.FromArgb(255, 0xF8, 0x71, 0x71)
-            : Windows.UI.Color.FromArgb(255, 0x4A, 0xDE, 0x80);
+            : Services.TextColorSettings.Primary;
+        PercentText.Foreground = new SolidColorBrush(fill);
         BarFill.Background = new SolidColorBrush(fill);
         BarFill.Width = muted ? 0 : BarWidth * (percent / 100.0);
         TipText.Text = muted ? "已静音" : "WinPlay 音量";
@@ -84,6 +93,15 @@ public sealed partial class VolumeOsdWindow : Window
         _appWindow.Show();
         ShowWindow(_hwnd, 8); // SW_SHOWNA — visible, does not steal focus
         SetWindowPos(_hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0013); // TOPMOST | NOMOVE | NOSIZE | NOACTIVATE
+        // Present rewrites the backdrop. Doing that on every key press drops the veil
+        // and the popup no longer matches the transparency slider.
+        if (_glassReady)
+            Services.WindowBackdropService.Refresh(this);
+        else
+        {
+            Services.WindowBackdropService.Present(this);
+            _glassReady = true;
+        }
         _visible = true;
 
         _hide.Stop();

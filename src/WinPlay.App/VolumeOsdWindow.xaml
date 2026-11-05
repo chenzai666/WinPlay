@@ -4,47 +4,54 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="WinPlay volume">
 
-    <Grid x:Name="Root" Width="340" Height="118" Background="#202020">
-        <TextBlock
-            x:Name="NameText"
-            Margin="20,16,90,0"
-            VerticalAlignment="Top"
-            Foreground="#E5E5E5"
-            FontFamily="Microsoft YaHei UI"
-            FontSize="16"
-            TextTrimming="CharacterEllipsis"
-            Text="WinPlay" />
-        <TextBlock
-            x:Name="PercentText"
-            Margin="0,12,20,0"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Top"
-            Foreground="#4ADE80"
-            FontFamily="Microsoft YaHei UI"
-            FontSize="22"
-            FontWeight="SemiBold"
-            Text="20%" />
-        <Grid
-            x:Name="BarTrack"
-            Width="300"
-            Height="10"
-            Margin="20,58,0,0"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Background="#3F3F46">
-            <Border
-                x:Name="BarFill"
-                Width="0"
-                HorizontalAlignment="Left"
-                Background="#4ADE80" />
-        </Grid>
-        <TextBlock
-            x:Name="TipText"
-            Margin="20,78,20,0"
-            VerticalAlignment="Top"
-            Foreground="#A1A1AA"
-            FontFamily="Microsoft YaHei UI"
-            FontSize="12"
-            Text="WinPlay 音量" />
+    <Grid x:Name="Root" Width="420" Height="64" Background="Transparent">
+        <Border
+            CornerRadius="20"
+            Padding="16,0"
+            Background="Transparent"
+            BorderBrush="Transparent"
+            BorderThickness="0">
+            <Grid VerticalAlignment="Center" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon Glyph="&#xE767;" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                <TextBlock
+                    x:Name="NameText"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    FontSize="14"
+                    TextTrimming="CharacterEllipsis"
+                    Text="WinPlay" />
+                <Grid
+                    x:Name="BarTrack"
+                    Grid.Column="2"
+                    Height="6"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource SliderTrackBrush}">
+                    <Border
+                        x:Name="BarFill"
+                        Width="0"
+                        HorizontalAlignment="Left"
+                        Background="{ThemeResource AccentBrush}"
+                        CornerRadius="3" />
+                </Grid>
+                <TextBlock
+                    x:Name="PercentText"
+                    Grid.Column="3"
+                    MinWidth="48"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Right"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Text="20%" />
+            </Grid>
+        </Border>
+        <TextBlock x:Name="TipText" Visibility="Collapsed" Text="WinPlay 音量" />
     </Grid>
 </Window>

@@ -2,56 +2,137 @@
     x:Class="WinPlay.App.HotkeySettingsWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="WinPlay 快捷键">
+    Title="WinPlay 设置">
 
-    <Grid Padding="20" RowSpacing="12">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <TextBlock
-            Grid.Row="0"
-            TextWrapping="Wrap"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Text="点一下输入框，再按下新的组合键。也可以直接写成 Ctrl+Shift+F1 或 VolumeUp。推流时，键盘上的音量键仍然可用。" />
+        <Border Grid.Column="0" Padding="12,16" Background="{ThemeResource CardBackgroundBrush}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="设置" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="8,0,0,12" />
+                <RadioButton x:Name="NavGeneral" Content="通用" GroupName="SettingsNav" Checked="OnNavChecked" Tag="general" />
+                <RadioButton x:Name="NavAudio" Content="音频" GroupName="SettingsNav" Checked="OnNavChecked" Tag="audio" />
+                <RadioButton x:Name="NavShortcuts" Content="快捷键" GroupName="SettingsNav" Checked="OnNavChecked" Tag="shortcuts" />
+                <RadioButton x:Name="NavAbout" Content="关于" GroupName="SettingsNav" Checked="OnNavChecked" Tag="about" />
+            </StackPanel>
+        </Border>
 
-        <Grid Grid.Row="1" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="88" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="提高音量" VerticalAlignment="Center" />
-            <TextBox x:Name="UpBox" Grid.Column="1" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
-        </Grid>
-        <Grid Grid.Row="2" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="88" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="降低音量" VerticalAlignment="Center" />
-            <TextBox x:Name="DownBox" Grid.Column="1" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
-        </Grid>
-        <Grid Grid.Row="3" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="88" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="静音切换" VerticalAlignment="Center" />
-            <TextBox x:Name="MuteBox" Grid.Column="1" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
-        </Grid>
+        <ScrollViewer Grid.Column="1" Padding="24,20">
+            <Grid>
+                <StackPanel x:Name="GeneralPage" Spacing="4">
+                    <TextBlock Text="通用" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,0,0,12" />
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="登录时启动" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBlock Text="开机后留在托盘，不弹出设备卡片" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="StartupSwitch" HorizontalAlignment="Right" Toggled="OnStartupToggled" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="磨砂玻璃" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBlock Text="背后的画面会被模糊，和终端的亚克力一样" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="GlassSwitch" HorizontalAlignment="Right" Toggled="OnGlassToggled" />
+                        </Grid>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <TextBlock Text="透明度" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBlock x:Name="OpacityText" HorizontalAlignment="Right" Foreground="{ThemeResource SecondaryTextBrush}" />
+                            </Grid>
+                            <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="OnOpacityChanged" />
+                            <TextBlock Text="只改变设备卡片和音量条。设置窗口保持不变。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="字体颜色" Foreground="{ThemeResource PrimaryTextBrush}" />
+                            <TextBlock Text="壁纸变了就换一个看得清的。设备卡片、音量条和这里的字一起变。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <RadioButton x:Name="TextBlack" GroupName="TextColor" Tag="000000" Content="黑色" Checked="OnTextColorChecked" />
+                            <RadioButton x:Name="TextGray" GroupName="TextColor" Tag="3A3A3C" Content="深灰" Checked="OnTextColorChecked" />
+                            <RadioButton x:Name="TextWhite" GroupName="TextColor" Tag="F5F5F7" Content="白色" Checked="OnTextColorChecked" />
+                            <RadioButton x:Name="TextPink" GroupName="TextColor" Tag="F4A5B0" Content="粉色" Checked="OnTextColorChecked" />
+                            <RadioButton x:Name="TextBlue" GroupName="TextColor" Tag="0A84FF" Content="蓝色" Checked="OnTextColorChecked" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="4" TextWrapping="Wrap" Foreground="#F87171" />
+                <StackPanel x:Name="AudioPage" Visibility="Collapsed" Spacing="4">
+                    <TextBlock Text="音频" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,0,0,12" />
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="缓冲" Foreground="{ThemeResource PrimaryTextBrush}" />
+                            <TextBlock Text="下次连接音箱时生效" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                            <RadioButton x:Name="BufferRealTime" Content="实时（约 0.3 秒）" GroupName="Buffer" Tag="RealTime" Checked="OnBufferChecked" />
+                            <RadioButton x:Name="BufferLow" Content="低延迟（0.7 秒）" GroupName="Buffer" Tag="Low" Checked="OnBufferChecked" />
+                            <RadioButton x:Name="BufferNormal" Content="普通（2 秒）" GroupName="Buffer" Tag="Normal" Checked="OnBufferChecked" />
+                            <RadioButton x:Name="BufferBuffered" Content="缓冲（3 秒）" GroupName="Buffer" Tag="Buffered" Checked="OnBufferChecked" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
-        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-            <Button Content="恢复默认" Click="OnReset" />
-            <Button Content="取消" Click="OnCancel" />
-            <Button Content="保存" Click="OnSave" Style="{StaticResource AccentButtonStyle}" />
-        </StackPanel>
+                <StackPanel x:Name="ShortcutsPage" Visibility="Collapsed">
+                    <TextBlock Text="快捷键" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,0,0,8" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource SecondaryTextBrush}" Margin="0,0,0,12"
+                               Text="点一下输入框，再按下新的组合键。也可以直接写成 Ctrl+Shift+F1 或 VolumeUp。推流时，键盘上的音量键仍然可用。" />
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Spacing="10">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="88" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="提高音量" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBox x:Name="UpBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="88" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="降低音量" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBox x:Name="DownBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                            </Grid>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="88" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="静音切换" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                <TextBox x:Name="MuteBox" Grid.Column="1" CornerRadius="8" GotFocus="OnChordFocus" PreviewKeyDown="OnChordKey" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Foreground="#F87171" Margin="0,0,0,8" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button Content="恢复默认" Click="OnReset" />
+                        <Button Content="取消" Click="OnCancel" />
+                        <Button Content="保存" Click="OnSave" Style="{StaticResource AccentButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="AboutPage" Visibility="Collapsed" Spacing="4">
+                    <TextBlock Text="关于" FontSize="22" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,0,0,12" />
+                    <Border Style="{StaticResource SettingsCardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Name="VersionText" Foreground="{ThemeResource PrimaryTextBrush}" />
+                            <TextBlock Text="把 Windows 的声音送到 AirPlay 音箱。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                <Button Content="GitHub" Click="OnOpenGitHub" />
+                                <Button Content="反馈问题" Click="OnOpenIssues" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
     </Grid>
 </Window>

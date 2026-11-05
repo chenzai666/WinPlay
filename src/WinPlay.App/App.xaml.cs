@@ -18,6 +18,7 @@ public partial class App : Application
 {
     private TrayIcon? _tray;
     private FlyoutWindow? _flyout;
+    private VolumeOsdWindow? _osd;
     private HotkeySettingsWindow? _hotkeys;
     private MainViewModel? _viewModel;
     private static Mutex? _instanceMutex;
@@ -54,13 +55,15 @@ public partial class App : Application
             return;
         }
 
+        TextColorSettings.Apply();
         var dispatcher = DispatcherQueue.GetForCurrentThread();
         _dispatcher = dispatcher;
         _viewModel = new MainViewModel(dispatcher);
-        var osd = new VolumeOsdWindow();
+        _osd = new VolumeOsdWindow();
         _viewModel.ShowVolumeHud = (name, percent) =>
-            dispatcher.TryEnqueue(() => osd.ShowLevel(name, percent));
+            dispatcher.TryEnqueue(() => _osd?.ShowLevel(name, percent));
         _flyout = new FlyoutWindow(_viewModel);
+        _flyout.OpenSettings = OpenHotkeySettings;
 
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "winplay.ico");
         _tray = new TrayIcon("WinPlay — AirPlay to speakers and TVs", iconPath);
@@ -97,7 +100,7 @@ public partial class App : Application
             BufferItem(AirPlayStreamingSettings.Mode.Low, "AirPlay 低延迟（0.7 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Normal, "AirPlay 普通（2 秒）"),
             BufferItem(AirPlayStreamingSettings.Mode.Buffered, "AirPlay 缓冲（3 秒）"),
-            new TrayMenuItem { Text = "设置快捷键…", Clicked = OpenHotkeySettings },
+            new TrayMenuItem { Text = "设置…", Clicked = OpenHotkeySettings },
             new TrayMenuItem
             {
                 Text = $"快捷键 {HotkeySettings.VolumeUp.Text} / {HotkeySettings.VolumeDown.Text} / {HotkeySettings.Mute.Text}",
@@ -134,7 +137,26 @@ public partial class App : Application
         {
             if (_hotkeys is null)
             {
-                _hotkeys = new HotkeySettingsWindow();
+                try
+                {
+                    _hotkeys = new HotkeySettingsWindow();
+                }
+                catch (Exception ex)
+                {
+                    LogCrash("Settings", ex);
+                    _hotkeys = null;
+                    return;
+                }
+                _hotkeys.MaterialChanged = () =>
+                {
+                    _flyout?.ApplyMaterial();
+                    _osd?.ApplyMaterial();
+                };
+                _hotkeys.TextColorChanged = () =>
+                {
+                    if (_flyout is not null) WindowBackdropService.Restore(_flyout);
+                    if (_osd is not null) WindowBackdropService.Restore(_osd);
+                };
                 _hotkeys.Closed += (_, _) =>
                 {
                     _viewModel?.SuspendHotkeys(false);

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using System.Diagnostics;
+using System.Reflection;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -13,6 +15,14 @@ namespace WinPlay.App;
 /// <summary>Edits the three volume chords. Press a key in a box, or type Ctrl+PgUp / VolumeUp.</summary>
 public sealed partial class HotkeySettingsWindow : Window
 {
+    private const int WindowWidth = 760;
+    private const int WindowHeight = 520;
+    private bool _loading = true;
+
+    public Action? MaterialChanged { get; set; }
+
+    public Action? TextColorChanged { get; set; }
+
     public HotkeySettingsWindow()
     {
         InitializeComponent();
@@ -25,12 +35,161 @@ public sealed partial class HotkeySettingsWindow : Window
             presenter.IsMinimizable = false;
             presenter.IsAlwaysOnTop = true;
         }
-        app.Resize(new Windows.Graphics.SizeInt32(460, 340));
+        int corner = 2;
+        DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
+        WindowBackdropService.ApplySolid(this);
+        ApplySystemAccentTitleBar(hwnd, app);
+        Activated += (_, _) => ApplySystemAccentTitleBar(hwnd, app);
+        app.Resize(new Windows.Graphics.SizeInt32(WindowWidth, WindowHeight));
         var area = DisplayArea.GetFromWindowId(app.Id, DisplayAreaFallback.Primary).WorkArea;
         app.Move(new Windows.Graphics.PointInt32(
-            area.X + (area.Width - 460) / 2,
-            area.Y + (area.Height - 340) / 2));
+            area.X + (area.Width - WindowWidth) / 2,
+            area.Y + (area.Height - WindowHeight) / 2));
         LoadBoxes(HotkeySettings.VolumeUp.Text, HotkeySettings.VolumeDown.Text, HotkeySettings.Mute.Text);
+        StartupSwitch.IsOn = StartupManager.IsEnabled();
+        GlassSwitch.IsOn = CardMaterialSettings.UseGlass;
+        OpacitySlider.Value = CardMaterialSettings.Transparency;
+        OpacityText.Text = CardMaterialSettings.Transparency.ToString();
+        OpacitySlider.IsEnabled = GlassSwitch.IsOn;
+        SelectTextColor(CardMaterialSettings.TextHex);
+        switch (AirPlayStreamingSettings.Current)
+        {
+            case AirPlayStreamingSettings.Mode.Low: BufferLow.IsChecked = true; break;
+            case AirPlayStreamingSettings.Mode.Normal: BufferNormal.IsChecked = true; break;
+            case AirPlayStreamingSettings.Mode.Buffered: BufferBuffered.IsChecked = true; break;
+            default: BufferRealTime.IsChecked = true; break;
+        }
+        string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.3";
+        VersionText.Text = $"WinPlay {version}";
+        _loading = false;
+        NavGeneral.IsChecked = true;
+    }
+
+    private void OnNavChecked(object sender, RoutedEventArgs e)
+    {
+        if (_loading || GeneralPage is null || sender is not RadioButton button || button.IsChecked != true) return;
+        string page = button.Tag as string ?? "general";
+        GeneralPage.Visibility = page == "general" ? Visibility.Visible : Visibility.Collapsed;
+        AudioPage.Visibility = page == "audio" ? Visibility.Visible : Visibility.Collapsed;
+        ShortcutsPage.Visibility = page == "shortcuts" ? Visibility.Visible : Visibility.Collapsed;
+        AboutPage.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnStartupToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        StartupManager.SetEnabled(StartupSwitch.IsOn);
+    }
+
+    private void OnGlassToggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        CardMaterialSettings.Set(GlassSwitch.IsOn);
+        OpacitySlider.IsEnabled = GlassSwitch.IsOn;
+        MaterialChanged?.Invoke();
+    }
+
+    private void OnOpacityChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_loading) return;
+        int value = (int)Math.Round(OpacitySlider.Value);
+        OpacityText.Text = value.ToString();
+        CardMaterialSettings.SetTransparency(value);
+        if (!GlassSwitch.IsOn) return;
+        MaterialChanged?.Invoke();
+    }
+
+    private void OnTextColorChecked(object sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not RadioButton button || button.IsChecked != true) return;
+        if (button.Tag is not string hex) return;
+        CardMaterialSettings.SetTextHex(hex);
+        TextColorSettings.Apply();
+        TextColorChanged?.Invoke();
+    }
+
+    private void SelectTextColor(string hex)
+    {
+        TextBlack.IsChecked = hex == "000000";
+        TextGray.IsChecked = hex == "3A3A3C";
+        TextWhite.IsChecked = hex == "F5F5F7";
+        TextPink.IsChecked = hex == "F4A5B0";
+        TextBlue.IsChecked = hex == "0A84FF";
+    }
+
+    private void OnBufferChecked(object sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not RadioButton button || button.IsChecked != true) return;
+        if (button.Tag is string name && Enum.TryParse(name, out AirPlayStreamingSettings.Mode mode))
+            AirPlayStreamingSettings.Set(mode);
+    }
+
+    private void OnOpenGitHub(object sender, RoutedEventArgs e) => Open("https://github.com/chenzai666/WinPlay");
+
+    private void OnOpenIssues(object sender, RoutedEventArgs e) => Open("https://github.com/chenzai666/WinPlay/issues/new/choose");
+
+    private static void Open(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception) { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    /// <summary>
+    /// Windows paints a darkened caption when immersive dark mode is on.
+    /// Use the accent chosen in Settings → Personalization → Colors instead.
+    /// </summary>
+    private static void ApplySystemAccentTitleBar(IntPtr hwnd, AppWindow app)
+    {
+        Windows.UI.Color accent = ReadSystemAccent();
+        double luma = (0.2126 * accent.R + 0.7152 * accent.G + 0.0722 * accent.B) / 255.0;
+        Windows.UI.Color foreground = luma > 0.6
+            ? Windows.UI.Color.FromArgb(255, 0x1C, 0x1C, 0x1E)
+            : Windows.UI.Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
+        int caption = accent.R | (accent.G << 8) | (accent.B << 16);
+        int text = foreground.R | (foreground.G << 8) | (foreground.B << 16);
+        DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int));
+        DwmSetWindowAttribute(hwnd, 36, ref text, sizeof(int));
+
+        AppWindowTitleBar bar = app.TitleBar;
+        Windows.UI.Color hover = Shade(accent, 0.88);
+        Windows.UI.Color pressed = Shade(accent, 0.76);
+        bar.BackgroundColor = accent;
+        bar.InactiveBackgroundColor = accent;
+        bar.ForegroundColor = foreground;
+        bar.InactiveForegroundColor = foreground;
+        bar.ButtonBackgroundColor = accent;
+        bar.ButtonInactiveBackgroundColor = accent;
+        bar.ButtonForegroundColor = foreground;
+        bar.ButtonInactiveForegroundColor = foreground;
+        bar.ButtonHoverBackgroundColor = hover;
+        bar.ButtonHoverForegroundColor = foreground;
+        bar.ButtonPressedBackgroundColor = pressed;
+        bar.ButtonPressedForegroundColor = foreground;
+    }
+
+    private static Windows.UI.Color ReadSystemAccent()
+    {
+        try
+        {
+            using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
+            if (key?.GetValue("AccentColor") is int raw)
+            {
+                uint value = unchecked((uint)raw);
+                return Windows.UI.Color.FromArgb(255, (byte)value, (byte)(value >> 8), (byte)(value >> 16));
+            }
+        }
+        catch (Exception) { }
+        Windows.UI.Color fallback = new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+        return Windows.UI.Color.FromArgb(255, fallback.R, fallback.G, fallback.B);
+    }
+
+    private static Windows.UI.Color Shade(Windows.UI.Color color, double scale)
+    {
+        static byte Mix(byte channel, double scale) => (byte)Math.Clamp((int)(channel * scale), 0, 255);
+        return Windows.UI.Color.FromArgb(255, Mix(color.R, scale), Mix(color.G, scale), Mix(color.B, scale));
     }
 
     private void LoadBoxes(string up, string down, string mute)

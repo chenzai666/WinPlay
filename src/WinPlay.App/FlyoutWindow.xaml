@@ -5,23 +5,36 @@
     xmlns:vm="using:WinPlay.App.ViewModels"
     Title="WinPlay">
 
-    <Grid Padding="16,14,16,12" RowSpacing="12">
+    <Grid Background="Transparent">
+    <Grid x:Name="CardMotion" Padding="16,14,16,12" RowSpacing="8" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10">
-            <FontIcon Glyph="&#xEC15;" FontSize="18" VerticalAlignment="Center" />
-            <TextBlock
-                Text="WinPlay"
+        <Grid Grid.Row="0">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <FontIcon Glyph="&#xEC15;" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                <TextBlock
+                    Text="WinPlay"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    FontWeight="SemiBold"
+                    FontSize="16" />
+            </StackPanel>
+            <Button
+                HorizontalAlignment="Right"
                 VerticalAlignment="Center"
-                Style="{StaticResource BodyStrongTextBlockStyle}" />
-        </StackPanel>
+                Background="Transparent"
+                BorderThickness="0"
+                Padding="8"
+                Click="OnOpenSettings"
+                ToolTipService.ToolTip="设置">
+                <FontIcon Glyph="&#xE713;" FontSize="16" Foreground="{ThemeResource SecondaryTextBrush}" />
+            </Button>
+        </Grid>
 
-        <!-- Device list -->
         <Grid Grid.Row="1" MinHeight="120">
             <StackPanel
                 Spacing="10"
@@ -30,100 +43,99 @@
                 Visibility="{x:Bind ViewModel.HasNoDevices, Mode=OneWay}">
                 <ProgressRing IsActive="True" Width="28" Height="28" />
                 <TextBlock
-                    Text="Looking for devices…"
+                    Text="正在查找设备…"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    Foreground="{ThemeResource SecondaryTextBrush}" />
             </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="460">
-                <ItemsControl ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:PickerRowViewModel">
-                            <StackPanel Margin="0,2">
-
-                                <!-- Speaker / HomePod / stereo pair: the whole row toggles audio -->
-                                <ToggleButton
-                                    Visibility="{x:Bind IsAudioOnly, Mode=OneWay}"
-                                    IsChecked="{x:Bind IsAudioChecked, Mode=TwoWay}"
-                                    IsEnabled="{x:Bind IsAudioCapable, Mode=OneWay}"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch"
-                                    Padding="12,10"
-                                    CornerRadius="10"
-                                    ToolTipService.ToolTip="{x:Bind MembersTooltip, Mode=OneWay}">
-                                    <Grid ColumnSpacing="14">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <FontIcon Grid.Column="0" Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="18" VerticalAlignment="Center" />
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                            <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" Style="{StaticResource BodyTextBlockStyle}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                        <Grid Grid.Column="2" VerticalAlignment="Center">
-                                            <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsBusy, Mode=OneWay}" Visibility="{x:Bind IsBusy, Mode=OneWay}" />
-                                            <FontIcon Glyph="&#xE73E;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Visibility="{x:Bind ShowAudioCheck, Mode=OneWay}" />
+                <StackPanel>
+                    <TextBlock Text="音频输出" Style="{StaticResource SectionLabelStyle}" />
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PickerRowViewModel">
+                                <StackPanel Margin="0,0,0,8">
+                                    <ToggleButton
+                                        Style="{StaticResource DeviceCardStyle}"
+                                        Visibility="{x:Bind IsAudioOnly, Mode=OneWay}"
+                                        IsChecked="{x:Bind IsAudioChecked, Mode=TwoWay}"
+                                        IsEnabled="{x:Bind IsAudioCapable, Mode=OneWay}"
+                                        ToolTipService.ToolTip="{x:Bind MembersTooltip, Mode=OneWay}">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <FontIcon Grid.Column="0" Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" Foreground="{ThemeResource PrimaryTextBrush}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Foreground="{ThemeResource SecondaryTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                <ProgressRing Width="16" Height="16" IsActive="{x:Bind IsBusy, Mode=OneWay}" Visibility="{x:Bind IsBusy, Mode=OneWay}" />
+                                                <FontIcon Glyph="&#xE73E;" FontSize="14" Foreground="{ThemeResource AccentBrush}" Visibility="{x:Bind ShowAudioCheck, Mode=OneWay}" />
+                                            </Grid>
                                         </Grid>
-                                    </Grid>
-                                </ToggleButton>
+                                    </ToggleButton>
 
-                                <!-- Apple TV: an info row with explicit Audio / Mirror choices -->
-                                <StackPanel Visibility="{x:Bind CanMirror, Mode=OneWay}" Padding="12,8" Spacing="10"
-                                    ToolTipService.ToolTip="{x:Bind MembersTooltip, Mode=OneWay}">
-                                    <Grid ColumnSpacing="14">
+                                    <Border
+                                        Style="{StaticResource SettingsCardStyle}"
+                                        Visibility="{x:Bind CanMirror, Mode=OneWay}"
+                                        ToolTipService.ToolTip="{x:Bind MembersTooltip, Mode=OneWay}">
+                                        <StackPanel Spacing="10">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <FontIcon Grid.Column="0" Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="16" VerticalAlignment="Center" Foreground="{ThemeResource PrimaryTextBrush}" />
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                    <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" Foreground="{ThemeResource PrimaryTextBrush}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Foreground="{ThemeResource SecondaryTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <ProgressRing Grid.Column="2" Width="16" Height="16" VerticalAlignment="Center" IsActive="{x:Bind IsBusy, Mode=OneWay}" Visibility="{x:Bind IsBusy, Mode=OneWay}" />
+                                            </Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="28,0,0,0">
+                                                <ToggleButton IsChecked="{x:Bind IsAudioChecked, Mode=TwoWay}" CornerRadius="8" Padding="12,6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                                        <FontIcon Glyph="&#xE767;" FontSize="14" />
+                                                        <TextBlock Text="音频" FontSize="12" />
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                                <ToggleButton IsChecked="{x:Bind IsMirrorChecked, Mode=TwoWay}" CornerRadius="8" Padding="12,6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                                        <FontIcon Glyph="{x:Bind MirrorGlyph, Mode=OneWay}" FontSize="14" />
+                                                        <TextBlock Text="镜像" FontSize="12" />
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Grid Margin="16,0,8,0" ColumnSpacing="10" Visibility="{x:Bind ShowVolume, Mode=OneWay}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <FontIcon Grid.Column="0" Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="18" VerticalAlignment="Center" />
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                            <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" Style="{StaticResource BodyTextBlockStyle}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                        <ProgressRing Grid.Column="2" Width="16" Height="16" VerticalAlignment="Center" IsActive="{x:Bind IsBusy, Mode=OneWay}" Visibility="{x:Bind IsBusy, Mode=OneWay}" />
+                                        <FontIcon Grid.Column="0" Glyph="&#xE767;" FontSize="13" VerticalAlignment="Center" Foreground="{ThemeResource SecondaryTextBrush}" />
+                                        <Slider Grid.Column="1" Minimum="0" Maximum="100" StepFrequency="1" Value="{x:Bind VolumePercent, Mode=TwoWay}" VerticalAlignment="Center" />
                                     </Grid>
-                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="32,0,0,0">
-                                        <ToggleButton IsChecked="{x:Bind IsAudioChecked, Mode=TwoWay}" CornerRadius="8" Padding="12,6">
-                                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                                <FontIcon Glyph="&#xE767;" FontSize="14" />
-                                                <TextBlock Text="Audio" Style="{StaticResource CaptionTextBlockStyle}" />
-                                            </StackPanel>
-                                        </ToggleButton>
-                                        <ToggleButton IsChecked="{x:Bind IsMirrorChecked, Mode=TwoWay}" CornerRadius="8" Padding="12,6">
-                                            <StackPanel Orientation="Horizontal" Spacing="7">
-                                                <FontIcon Glyph="{x:Bind MirrorGlyph, Mode=OneWay}" FontSize="14" />
-                                                <TextBlock Text="Mirror" Style="{StaticResource CaptionTextBlockStyle}" />
-                                            </StackPanel>
-                                        </ToggleButton>
-                                    </StackPanel>
                                 </StackPanel>
-
-                                <!-- Volume (both kinds) when audio is streaming -->
-                                <Grid Margin="44,2,12,4" ColumnSpacing="10" Visibility="{x:Bind ShowVolume, Mode=OneWay}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <FontIcon Grid.Column="0" Glyph="&#xE767;" FontSize="13" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                    <Slider Grid.Column="1" Minimum="0" Maximum="100" StepFrequency="1" Value="{x:Bind VolumePercent, Mode=TwoWay}" VerticalAlignment="Center" />
-                                </Grid>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </ScrollViewer>
         </Grid>
 
         <TextBlock
             Grid.Row="2"
             Text="{x:Bind ViewModel.Status, Mode=OneWay}"
-            Style="{StaticResource CaptionTextBlockStyle}"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            FontSize="12"
+            Foreground="{ThemeResource SecondaryTextBrush}"
             TextTrimming="CharacterEllipsis" />
+    </Grid>
     </Grid>
 </Window>
