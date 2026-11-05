@@ -21,6 +21,7 @@ public partial class App : Application
     private VolumeOsdWindow? _osd;
     private HotkeySettingsWindow? _hotkeys;
     private MainViewModel? _viewModel;
+    private DispatcherTimer? _materialProbeTimer;
     private static Mutex? _instanceMutex;
 
     public App()
@@ -46,6 +47,29 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Finite UI-only probe: exercise the real HUD lifecycle without creating
+        // a streaming view model, tray icon, hotkeys, network sockets or mutex.
+        if (args.Arguments.Trim() == "--diagnose-volume-ui")
+        {
+            TextColorSettings.Apply();
+            _osd = new VolumeOsdWindow();
+            int remaining = 3;
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _materialProbeTimer.Tick += (_, _) =>
+            {
+                if (--remaining > 0) _osd.ShowLevel("WinPlay", 65);
+                else
+                {
+                    _materialProbeTimer.Stop();
+                    _osd.Close();
+                    Exit();
+                }
+            };
+            DispatcherQueue.GetForCurrentThread().TryEnqueue(() => _osd.ShowLevel("WinPlay", 65));
+            _materialProbeTimer.Start();
+            return;
+        }
+
         // Single instance: a second WinPlay would fail to bind the PTP grandmaster ports
         // (319/320) and break streaming. If one is already running, exit quietly.
         _instanceMutex = new Mutex(true, @"Local\WinPlay.SingleInstance", out bool createdNew);
