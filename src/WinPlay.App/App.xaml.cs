@@ -49,7 +49,8 @@ public partial class App : Application
     {
         // Finite UI-only probe: exercise the real HUD lifecycle without creating
         // a streaming view model, tray icon, hotkeys, network sockets or mutex.
-        if (args.Arguments.Trim() == "--diagnose-volume-ui")
+        if (args.Arguments.Trim() == "--diagnose-volume-ui" ||
+            Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-volume-ui", StringComparer.Ordinal))
         {
             TextColorSettings.Apply();
             _osd = new VolumeOsdWindow();

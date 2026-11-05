@@ -5,7 +5,7 @@ using Windows.UI;
 
 namespace WinPlay.App.Services;
 
-/// <summary>保留主题原始文字色，手动选择时仅修改浅色和深色画刷。</summary>
+/// <summary>保留主题原始颜色，手动选择时统一浅色和深色文字及强调色。</summary>
 public static class TextColorSettings
 {
     private static readonly Dictionary<SolidColorBrush, Color> Defaults = [];
@@ -27,16 +27,27 @@ public static class TextColorSettings
 
             Update(theme, "PrimaryTextBrush", selected);
             Update(theme, "SecondaryTextBrush", selected is Color color ? Secondary(color) : null);
+            Update(theme, "AccentBrush", selected);
+            Update(theme, "NavigationSelectedTextBrush", selected);
+            Update(theme, "CheckedCardBrush", selected, preserveAlpha: true);
+            Update(theme, "NavigationSelectedBrush", selected, preserveAlpha: true);
+            Update(theme, "AccentFillColorDefaultBrush", selected);
+            Update(theme, "AccentFillColorSecondaryBrush", selected, preserveAlpha: true);
+            Update(theme, "AccentFillColorTertiaryBrush", selected, preserveAlpha: true);
+            Update(theme, "AccentTextFillColorPrimaryBrush", selected);
         }
         foreach (ResourceDictionary merged in dictionary.MergedDictionaries)
             ApplyToDictionary(merged, selected);
     }
 
-    private static void Update(ResourceDictionary theme, string key, Color? color)
+    private static void Update(ResourceDictionary theme, string key, Color? color, bool preserveAlpha = false)
     {
         if (!theme.ContainsKey(key) || theme[key] is not SolidColorBrush brush) return;
         if (!Defaults.ContainsKey(brush)) Defaults.Add(brush, brush.Color);
-        brush.Color = color ?? Defaults[brush];
+        Color original = Defaults[brush];
+        brush.Color = color is Color chosen
+            ? Color.FromArgb(preserveAlpha ? original.A : chosen.A, chosen.R, chosen.G, chosen.B)
+            : original;
     }
 
     private static Color? Parse(string? hex)

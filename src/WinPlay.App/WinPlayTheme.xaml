@@ -21,6 +21,10 @@
             <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FF3A3A3C" />
             <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
             <SolidColorBrush x:Key="AccentBrush" Color="#FF007AFF" />
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemAccentColorDark1}" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemAccentColorDark1}" Opacity="0.9" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemAccentColorDark1}" Opacity="0.8" />
+            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="{ThemeResource SystemAccentColorDark1}" />
             <SolidColorBrush x:Key="SliderTrackBrush" Color="#33000000" />
             <StaticResource x:Key="SliderTrackFill" ResourceKey="SliderTrackBrush" />
             <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="SliderTrackBrush" />
@@ -48,6 +52,10 @@
             <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FFC7C7CC" />
             <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
             <SolidColorBrush x:Key="AccentBrush" Color="#FF0A84FF" />
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemAccentColorLight2}" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemAccentColorLight2}" Opacity="0.9" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemAccentColorLight2}" Opacity="0.8" />
+            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="{ThemeResource SystemAccentColorLight2}" />
             <SolidColorBrush x:Key="SliderTrackBrush" Color="#33FFFFFF" />
             <StaticResource x:Key="SliderTrackFill" ResourceKey="SliderTrackBrush" />
             <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="SliderTrackBrush" />
@@ -75,6 +83,10 @@
             <SolidColorBrush x:Key="SecondaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI Variable</FontFamily>
             <SolidColorBrush x:Key="AccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="SliderTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <StaticResource x:Key="SliderTrackFill" ResourceKey="SliderTrackBrush" />
             <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="SliderTrackBrush" />
