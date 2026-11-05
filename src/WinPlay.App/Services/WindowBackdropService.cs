@@ -19,15 +19,22 @@ public static class WindowBackdropService
             ApplySolid(window);
             return;
         }
-        if (window.SystemBackdrop is not CardAcrylicBackdrop)
+        if (window.SystemBackdrop is not CardAcrylicBackdrop { UsesAccentTint: false })
             window.SystemBackdrop = new CardAcrylicBackdrop();
         Refresh(window);
     }
 
     public static void ApplySettings(Window window)
     {
-        if (CardMaterialSettings.UseGlass) ApplyAcrylic(window);
-        else ApplySolid(window);
+        if (!CardMaterialSettings.UseGlass || !DesktopAcrylicController.IsSupported())
+        {
+            ApplySolid(window);
+            return;
+        }
+        ThemeService.Register(window);
+        if (window.SystemBackdrop is not CardAcrylicBackdrop { UsesAccentTint: true })
+            window.SystemBackdrop = new CardAcrylicBackdrop(usesAccentTint: true);
+        Refresh(window);
     }
 
     public static void ApplySolid(Window window)
@@ -66,6 +73,10 @@ public static class WindowBackdropService
 /// <summary>Uses the supported WinUI lifecycle and system policy fallback.</summary>
 internal sealed class CardAcrylicBackdrop : SystemBackdrop
 {
+    internal bool UsesAccentTint { get; }
+
+    internal CardAcrylicBackdrop(bool usesAccentTint = false) => UsesAccentTint = usesAccentTint;
+
     private DesktopAcrylicController? _controller;
     private XamlRoot? _root;
     private ICompositionSupportsSystemBackdrop? _target;
@@ -114,14 +125,16 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         if (_controller is null) return;
         bool dark = (_root?.Content as FrameworkElement)?.ActualTheme == ElementTheme.Dark;
         bool highContrast = _configuration?.IsHighContrast == true;
-        Color accent = TextColorSettings.Accent;
+        Color accent = UsesAccentTint ? TextColorSettings.Accent : default;
         var appearance = (dark, highContrast, CardMaterialSettings.Transparency, accent);
         if (_lastAppearance == appearance) return;
         _lastAppearance = appearance;
         var material = AcrylicMaterial.FromTransparency(CardMaterialSettings.Transparency);
         Color neutral = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
         byte Mix(byte background, byte foreground) => (byte)Math.Round(background * 0.35 + foreground * 0.65);
-        Color tint = Color.FromArgb(255, Mix(neutral.R, accent.R), Mix(neutral.G, accent.G), Mix(neutral.B, accent.B));
+        Color tint = UsesAccentTint
+            ? Color.FromArgb(255, Mix(neutral.R, accent.R), Mix(neutral.G, accent.G), Mix(neutral.B, accent.B))
+            : neutral;
         _controller.TintOpacity = material.TintOpacity;
         _controller.LuminosityOpacity = material.LuminosityOpacity;
         _controller.FallbackColor = highContrast

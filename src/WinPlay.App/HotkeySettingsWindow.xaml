@@ -61,7 +61,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="磨砂玻璃" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBlock Text="所有窗口使用带强调色的 Acrylic 磨砂材质" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="设置窗口跟随强调色；设备面板和音量提示使用中性磨砂" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             </StackPanel>
                             <ToggleSwitch x:Name="GlassSwitch" Grid.Column="1" HorizontalAlignment="Right" OffContent="" OnContent="" Toggled="OnGlassToggled" />
                         </Grid>

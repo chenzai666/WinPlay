@@ -34,16 +34,16 @@ public sealed partial class VolumeOsdWindow : Window
 
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(true, false);
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
             presenter.IsMinimizable = false;
             presenter.IsAlwaysOnTop = true;
+            presenter.SetBorderAndTitleBar(true, false);
         }
 
         ApplyMaterial();
 
-        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
+        Services.PopupWindowService.ResizeClient(_appWindow, _hwnd, PhysicalWidth, PhysicalHeight);
         // SW_SHOWNA draws nothing until this window has been Activate()'d once.
         // Opening the device card used to be that first activation. Do it off-screen
         // at launch so a sign-in start can show the volume card on the first key.
@@ -146,7 +146,7 @@ public sealed partial class VolumeOsdWindow : Window
         _primeAttempts++;
         int ex = GetWindowLong(_hwnd, -20);
         SetWindowLong(_hwnd, -20, ex & ~0x08000000); // Activate cannot attach XAML while NOACTIVATE is set
-        SetWindowPos(_hwnd, new IntPtr(-1), -32000, -32000, PhysicalWidth, PhysicalHeight, 0x0010);
+        SetWindowPos(_hwnd, new IntPtr(-1), -32000, -32000, 0, 0, 0x0011); // NOSIZE | NOACTIVATE
         try
         {
             _appWindow.Move(new Windows.Graphics.PointInt32(-32000, -32000));
@@ -182,7 +182,7 @@ public sealed partial class VolumeOsdWindow : Window
         try { Activate(); }
         catch (Exception) { }
         SetWindowLong(_hwnd, -20, ex | 0x08000000);
-        _islandReady = true;
+        _islandReady = HasContentBridge();
     }
 
     private bool HasContentBridge()
@@ -206,7 +206,7 @@ public sealed partial class VolumeOsdWindow : Window
     private void PlaceOnce()
     {
         int x, y;
-        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(PhysicalWidth, PhysicalHeight));
+        Services.PopupWindowService.ResizeClient(_appWindow, _hwnd, PhysicalWidth, PhysicalHeight);
         int width = _appWindow.Size.Width, height = _appWindow.Size.Height;
         try
         {
@@ -224,8 +224,8 @@ public sealed partial class VolumeOsdWindow : Window
             x = Math.Max(0, (screenW - width) / 2);
             y = Math.Max(0, screenH - height - (int)(100 * Scale));
         }
-        SetWindowPos(_hwnd, new IntPtr(-1), x, y, width, height, 0x0010); // NOACTIVATE
-        _appWindow.MoveAndResize(new Windows.Graphics.RectInt32(x, y, width, height));
+        SetWindowPos(_hwnd, new IntPtr(-1), x, y, 0, 0, 0x0011); // NOSIZE | NOACTIVATE
+        _appWindow.Move(new Windows.Graphics.PointInt32(x, y));
         _placed = true;
     }
 

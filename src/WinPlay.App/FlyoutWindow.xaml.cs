@@ -41,11 +41,11 @@ public sealed partial class FlyoutWindow : Window
         _appWindow.IsShownInSwitchers = false;
 
         var presenter = (OverlappedPresenter)_appWindow.Presenter;
-        presenter.SetBorderAndTitleBar(true, false);
         presenter.IsResizable = false;
         presenter.IsMaximizable = false;
         presenter.IsMinimizable = false;
         presenter.IsAlwaysOnTop = true;
+        presenter.SetBorderAndTitleBar(true, false);
 
         // Win11 rounded corners for a borderless popup.
         int cornerPreference = 2; // DWMWCP_ROUND
@@ -304,7 +304,7 @@ public sealed partial class FlyoutWindow : Window
         }
 
         // Keep the requested client size while allowing DWM its non-client border.
-        _appWindow.ResizeClient(new Windows.Graphics.SizeInt32(width, height));
+        Services.PopupWindowService.ResizeClient(_appWindow, WindowNative.GetWindowHandle(this), width, height);
         var outer = _appWindow.Size;
         int x = work.X + work.Width - outer.Width - margin;
         int y = work.Y + work.Height - outer.Height - margin;
