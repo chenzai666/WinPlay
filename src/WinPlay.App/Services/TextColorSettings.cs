@@ -9,11 +9,24 @@ namespace WinPlay.App.Services;
 public static class TextColorSettings
 {
     private static readonly Dictionary<SolidColorBrush, Color> Defaults = [];
+    private static readonly Windows.UI.ViewManagement.UISettings SystemColors = new();
+    private static bool _watchingSystemColors;
 
     public static void Apply()
     {
         if (Application.Current?.Resources is not ResourceDictionary root) return;
-        ApplyToDictionary(root, Parse(CardMaterialSettings.TextHex), Parse(CardMaterialSettings.AccentHex));
+        if (!_watchingSystemColors)
+        {
+            var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            if (queue is not null)
+            {
+                _watchingSystemColors = true;
+                SystemColors.ColorValuesChanged += (_, _) => queue.TryEnqueue(Apply);
+            }
+        }
+        Color accent = Parse(CardMaterialSettings.AccentHex)
+            ?? SystemColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+        ApplyToDictionary(root, Parse(CardMaterialSettings.TextHex), accent);
     }
 
     private static void ApplyToDictionary(ResourceDictionary dictionary, Color? text, Color? accent)

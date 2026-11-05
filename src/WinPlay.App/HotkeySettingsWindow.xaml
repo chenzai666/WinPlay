@@ -97,7 +97,7 @@
                             <TextBlock Text="字体颜色只影响文字。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             <TextBlock Text="强调颜色" Foreground="{ThemeResource PrimaryTextBrush}" Margin="0,8,0,0" />
                             <ComboBox x:Name="AccentColorSelector" SelectionChanged="OnAccentColorChanged" HorizontalAlignment="Stretch">
-                                <ComboBoxItem Content="自动（跟随主题）" Tag="auto" />
+                                <ComboBoxItem Content="自动（跟随 Windows 强调色）" Tag="auto" />
                                 <ComboBoxItem Content="蓝色" Tag="0A84FF" />
                                 <ComboBoxItem Content="粉色" Tag="F4A5B0" />
                                 <ComboBoxItem Content="紫色" Tag="AF52DE" />

@@ -47,6 +47,47 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-theme-ui", StringComparer.Ordinal))
+        {
+            TextColorSettings.Apply();
+            _osd = new VolumeOsdWindow();
+            _hotkeys = new HotkeySettingsWindow();
+            int step = 0;
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+            _materialProbeTimer.Tick += (_, _) =>
+            {
+                if (step >= 9)
+                {
+                    _materialProbeTimer.Stop();
+                    _hotkeys.Close();
+                    _osd.Close();
+                    Exit();
+                    return;
+                }
+                var choice = (ThemeService.ThemeChoice)(step % 3);
+                ThemeService.Preview(choice);
+                if (step % 2 == 0) _hotkeys.Activate();
+                else _hotkeys.AppWindow.Hide();
+                _osd.ShowLevel("WinPlay", 65);
+                string? log = Environment.GetEnvironmentVariable("WINPLAY_UI_LOG_PATH");
+                if (!string.IsNullOrWhiteSpace(log))
+                {
+                    var systemAccent = new Windows.UI.ViewManagement.UISettings()
+                        .GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+                    var root = (FrameworkElement)_osd.Content;
+                    var resources = Application.Current.Resources.MergedDictionaries
+                        .First(dictionary => dictionary.ThemeDictionaries.ContainsKey("Light"));
+                    string key = root.ActualTheme == ElementTheme.Dark ? "Dark" : "Light";
+                    var palette = (ResourceDictionary)resources.ThemeDictionaries[key];
+                    var accent = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette["AccentBrush"]).Color;
+                    File.AppendAllText(log, $"theme-probe step={step} choice={choice} systemAccent={systemAccent} appliedAccent={accent}\n");
+                }
+                ++step;
+            };
+            _materialProbeTimer.Start();
+            return;
+        }
+
         // Finite UI-only probe: exercise the real HUD lifecycle without creating
         // a streaming view model, tray icon, hotkeys, network sockets or mutex.
         if (args.Arguments.Trim() == "--diagnose-volume-ui" ||

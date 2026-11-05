@@ -75,12 +75,14 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
 {
     private DesktopAcrylicController? _controller;
     private XamlRoot? _root;
+    private ICompositionSupportsSystemBackdrop? _target;
     private SystemBackdropConfiguration? _configuration;
     private (bool Dark, bool HighContrast, int Transparency)? _lastAppearance;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
         base.OnTargetConnected(target, xamlRoot);
+        _target = target;
         _root = xamlRoot;
         _configuration = new SystemBackdropConfiguration();
         _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
@@ -93,7 +95,10 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
 
     protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
-        base.OnDefaultSystemBackdropConfigurationChanged(target, xamlRoot);
+        // The base virtual notification does not need forwarding. On WinAppSDK 1.7
+        // forwarding can reject a hidden popup's target during a live theme change.
+        if (target is null || xamlRoot is null || _controller is null || _configuration is null ||
+            !ReferenceEquals(_root, xamlRoot) || !ReferenceEquals(_target, target)) return;
         UpdateConfiguration(target, xamlRoot);
     }
 
@@ -101,6 +106,7 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
     {
         if (_controller is null || _configuration is null) return;
         var defaults = GetDefaultSystemBackdropConfiguration(target, xamlRoot);
+        if (defaults is null) return;
         // WinUI owns defaults and rewrites its activation state when a popup hides.
         // Keep our transient-window policy separate, as required by SystemBackdrop.
         _configuration.Theme = defaults.Theme;
@@ -156,6 +162,7 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
             _controller = null;
         }
         _root = null;
+        _target = null;
         _configuration = null;
         _lastAppearance = null;
         base.OnTargetDisconnected(target);

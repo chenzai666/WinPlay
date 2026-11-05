@@ -26,14 +26,21 @@ public static class ThemeService
     }
 
     public static void Set(ThemeChoice choice)
+        => SetCore(choice, persist: true);
+
+    internal static void Preview(ThemeChoice choice)
+        => SetCore(choice, persist: false);
+
+    private static void SetCore(ThemeChoice choice, bool persist)
     {
         if (!Enum.IsDefined(choice)) return;
         Current = choice;
-        foreach (var window in Windows)
+        foreach (var window in Windows.ToArray())
         {
             Apply(window);
             WindowBackdropService.Refresh(window);
         }
+        if (!persist) return;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
