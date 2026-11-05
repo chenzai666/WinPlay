@@ -61,6 +61,11 @@ public static class ThemeService
         Apply(window);
     }
 
+    internal static void RefreshMaterials()
+    {
+        foreach (var window in Windows.ToArray()) WindowBackdropService.Refresh(window);
+    }
+
     private static void Apply(Window window)
     {
         if (window.Content is FrameworkElement root)

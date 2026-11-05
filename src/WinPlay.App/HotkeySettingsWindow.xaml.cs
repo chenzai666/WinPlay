@@ -37,7 +37,7 @@ public sealed partial class HotkeySettingsWindow : Window
         DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(SettingsTitleBar);
-        WindowBackdropService.ApplyMica(this);
+        ApplyMaterial();
         double scale = GetDpiForWindow(hwnd) / 96.0;
         var area = DisplayArea.GetFromWindowId(app.Id, DisplayAreaFallback.Primary).WorkArea;
         int width = Math.Min(area.Width, (int)Math.Ceiling(WindowWidth * scale));
@@ -105,6 +105,7 @@ public sealed partial class HotkeySettingsWindow : Window
         if (_loading) return;
         CardMaterialSettings.Set(GlassSwitch.IsOn);
         OpacitySlider.IsEnabled = GlassSwitch.IsOn;
+        ApplyMaterial();
         MaterialChanged?.Invoke();
     }
 
@@ -114,6 +115,7 @@ public sealed partial class HotkeySettingsWindow : Window
         int value = (int)Math.Round(OpacitySlider.Value);
         OpacityText.Text = value.ToString();
         CardMaterialSettings.SetTransparency(value);
+        WindowBackdropService.Refresh(this);
         if (!GlassSwitch.IsOn) return;
         MaterialChanged?.Invoke();
     }
@@ -124,6 +126,8 @@ public sealed partial class HotkeySettingsWindow : Window
         if (Enum.TryParse<ThemeService.ThemeChoice>(item.Tag as string, out var choice))
             ThemeService.Set(choice);
     }
+
+    public void ApplyMaterial() => WindowBackdropService.ApplySettings(this);
 
     private void OnTextColorChanged(object sender, SelectionChangedEventArgs e)
     {

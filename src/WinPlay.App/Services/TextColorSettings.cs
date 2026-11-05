@@ -24,10 +24,13 @@ public static class TextColorSettings
                 SystemColors.ColorValuesChanged += (_, _) => queue.TryEnqueue(Apply);
             }
         }
-        Color accent = Parse(CardMaterialSettings.AccentHex)
-            ?? SystemColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+        Color accent = Accent;
         ApplyToDictionary(root, Parse(CardMaterialSettings.TextHex), accent);
+        ThemeService.RefreshMaterials();
     }
+
+    internal static Color Accent => Parse(CardMaterialSettings.AccentHex)
+        ?? SystemColors.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
 
     private static void ApplyToDictionary(ResourceDictionary dictionary, Color? text, Color? accent)
     {

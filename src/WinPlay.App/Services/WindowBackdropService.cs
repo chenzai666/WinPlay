@@ -24,17 +24,10 @@ public static class WindowBackdropService
         Refresh(window);
     }
 
-    public static void ApplyMica(Window window)
+    public static void ApplySettings(Window window)
     {
-        ThemeService.Register(window);
-        if (!MicaController.IsSupported())
-        {
-            ApplySolid(window);
-            return;
-        }
-        if (window.SystemBackdrop is not MicaBackdrop)
-            window.SystemBackdrop = new MicaBackdrop();
-        Refresh(window);
+        if (CardMaterialSettings.UseGlass) ApplyAcrylic(window);
+        else ApplySolid(window);
     }
 
     public static void ApplySolid(Window window)
@@ -77,7 +70,7 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
     private XamlRoot? _root;
     private ICompositionSupportsSystemBackdrop? _target;
     private SystemBackdropConfiguration? _configuration;
-    private (bool Dark, bool HighContrast, int Transparency)? _lastAppearance;
+    private (bool Dark, bool HighContrast, int Transparency, Color Accent)? _lastAppearance;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
     {
@@ -121,16 +114,19 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         if (_controller is null) return;
         bool dark = (_root?.Content as FrameworkElement)?.ActualTheme == ElementTheme.Dark;
         bool highContrast = _configuration?.IsHighContrast == true;
-        var appearance = (dark, highContrast, CardMaterialSettings.Transparency);
+        Color accent = TextColorSettings.Accent;
+        var appearance = (dark, highContrast, CardMaterialSettings.Transparency, accent);
         if (_lastAppearance == appearance) return;
         _lastAppearance = appearance;
         var material = AcrylicMaterial.FromTransparency(CardMaterialSettings.Transparency);
-        Color tint = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
+        Color neutral = dark ? Color.FromArgb(255, 31, 32, 37) : Color.FromArgb(255, 248, 249, 252);
+        byte Mix(byte background, byte foreground) => (byte)Math.Round(background * 0.35 + foreground * 0.65);
+        Color tint = Color.FromArgb(255, Mix(neutral.R, accent.R), Mix(neutral.G, accent.G), Mix(neutral.B, accent.B));
         _controller.TintOpacity = material.TintOpacity;
         _controller.LuminosityOpacity = material.LuminosityOpacity;
         _controller.FallbackColor = highContrast
             ? new Windows.UI.ViewManagement.UISettings().GetColorValue(Windows.UI.ViewManagement.UIColorType.Background)
-            : tint;
+            : neutral;
         // WinAppSDK 1.7 can leave opacity-only changes unapplied (#10717).
         // A one-channel nudge commits the material, without replacing its controller.
         // https://github.com/microsoft/microsoft-ui-xaml/issues/10717

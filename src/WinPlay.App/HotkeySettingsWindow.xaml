@@ -61,7 +61,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="磨砂玻璃" Foreground="{ThemeResource PrimaryTextBrush}" />
-                                <TextBlock Text="设备面板和音量提示使用 Windows Acrylic 材质" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="所有窗口使用带强调色的 Acrylic 磨砂材质" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                             </StackPanel>
                             <ToggleSwitch x:Name="GlassSwitch" Grid.Column="1" HorizontalAlignment="Right" OffContent="" OnContent="" Toggled="OnGlassToggled" />
                         </Grid>
@@ -73,7 +73,7 @@
                                 <TextBlock x:Name="OpacityText" HorizontalAlignment="Right" Foreground="{ThemeResource SecondaryTextBrush}" />
                             </Grid>
                             <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="OnOpacityChanged" />
-                            <TextBlock Text="调整设备面板和音量提示的表面透明度。系统关闭透明效果或启用节能时可能使用纯色。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="调整设备面板、设置窗口和音量提示的玻璃通透度。系统关闭透明效果或启用节能时可能使用纯色。" FontSize="12" Foreground="{ThemeResource SecondaryTextBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource SettingsCardStyle}">
