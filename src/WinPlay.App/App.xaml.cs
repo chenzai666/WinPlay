@@ -22,6 +22,7 @@ public partial class App : Application
     private HotkeySettingsWindow? _hotkeys;
     private MainViewModel? _viewModel;
     private DispatcherTimer? _materialProbeTimer;
+    private Window? _designProbeWindow;
     private static Mutex? _instanceMutex;
 
     public App()
@@ -47,6 +48,30 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-design-ui", StringComparer.Ordinal))
+        {
+            TextColorSettings.Apply();
+            var card = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            {
+                Content = "测试设备 — 点击切换选中状态",
+                Style = (Style)Resources["DeviceCardStyle"],
+                IsChecked = false,
+            };
+            var editor = new Controls.HotkeyEditor { Text = "Ctrl+PgUp" };
+            var layout = new Microsoft.UI.Xaml.Controls.StackPanel { Spacing = 16, Padding = new Thickness(24) };
+            layout.Children.Add(new Microsoft.UI.Xaml.Controls.TextBlock { Text = "设备卡片和快捷键编辑测试" });
+            layout.Children.Add(card);
+            layout.Children.Add(editor);
+            _designProbeWindow = new Window { Title = "WinPlay 界面设计测试", Content = layout };
+            _designProbeWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(620, 320));
+            _materialProbeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            _materialProbeTimer.Tick += (_, _) => _designProbeWindow?.Close();
+            _designProbeWindow.Closed += (_, _) => { _materialProbeTimer.Stop(); _designProbeWindow = null; Exit(); };
+            _designProbeWindow.Activate();
+            _materialProbeTimer.Start();
+            return;
+        }
+
         bool settingsProbe = Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-settings-ui", StringComparer.Ordinal);
         if (settingsProbe || Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-theme-ui", StringComparer.Ordinal))
         {

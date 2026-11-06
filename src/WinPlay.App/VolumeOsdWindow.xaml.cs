@@ -41,6 +41,7 @@ public sealed partial class VolumeOsdWindow : Window
             presenter.SetBorderAndTitleBar(true, false);
         }
 
+        Services.WindowShapeService.Capsule(this);
         ApplyMaterial();
 
         Services.PopupWindowService.ResizeClient(_appWindow, _hwnd, PhysicalWidth, PhysicalHeight);

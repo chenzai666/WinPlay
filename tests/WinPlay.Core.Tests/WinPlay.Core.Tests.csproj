@@ -16,7 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\WinPlay.Core\WinPlay.Core.csproj" />
+    <Compile Include="..\..\src\WinPlay.App\Services\HotkeyKeycapFormatter.cs" Link="HotkeyKeycapFormatter.cs" />
     <Compile Include="..\..\src\WinPlay.App\Services\AcrylicMaterial.cs" Link="AcrylicMaterial.cs" />
+    <Compile Include="..\..\src\WinPlay.App\Services\WindowShapeGeometry.cs" Link="WindowShapeGeometry.cs" />
   </ItemGroup>
 
   <ItemGroup>

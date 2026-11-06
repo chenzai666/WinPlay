@@ -4,6 +4,15 @@ All notable changes to WinPlay are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] — 2026-11-06
+
+### 界面设计补齐
+
+- 音量 HUD 使用真实胶囊轮廓，设备与设置窗口采用随 DPI 缩放的 18 逻辑像素圆角，统一裁剪内容与玻璃底材。
+- 快捷键按独立键帽展示，点击后可捕获组合键或直接输入，保留原有保存与校验逻辑。
+- 设备卡片悬停与选中过渡分别为 150ms、180ms，按钮按压缩放为 100ms；尊重系统动画与高对比度设置。
+- 保留独立字体颜色、自动强调色及仅设置窗口着色的玻璃材质，增加有限时设计诊断入口。
+
 ## [0.1.4] — 2026-11-05
 
 ### 修复与改进

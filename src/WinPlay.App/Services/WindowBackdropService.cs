@@ -26,6 +26,7 @@ public static class WindowBackdropService
 
     public static void ApplySettings(Window window)
     {
+        WindowShapeService.Rounded(window);
         if (!CardMaterialSettings.UseGlass || !DesktopAcrylicController.IsSupported())
         {
             ApplySolid(window);
@@ -46,6 +47,7 @@ public static class WindowBackdropService
 
     public static void Refresh(Window window)
     {
+        WindowShapeService.Refresh(window);
         if (window.Content is not Panel root) return;
         // The XAML root stays clear so it cannot cover the real desktop acrylic.
         bool dark = root.ActualTheme == ElementTheme.Dark;
