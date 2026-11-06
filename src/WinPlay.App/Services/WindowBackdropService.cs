@@ -19,8 +19,8 @@ public static class WindowBackdropService
             ApplySolid(window);
             return;
         }
-        if (window.SystemBackdrop is not CardAcrylicBackdrop { UsesAccentTint: false })
-            window.SystemBackdrop = new CardAcrylicBackdrop();
+        if (window.SystemBackdrop is not PopupGlassBackdrop)
+            window.SystemBackdrop = new PopupGlassBackdrop();
         Refresh(window);
     }
 
@@ -60,6 +60,8 @@ public static class WindowBackdropService
             root.Background = new SolidColorBrush(surface);
         if (window.SystemBackdrop is CardAcrylicBackdrop acrylic)
             acrylic.Refresh();
+        else if (window.SystemBackdrop is PopupGlassBackdrop popup)
+            popup.Refresh();
         if (Microsoft.UI.Windowing.AppWindowTitleBar.IsCustomizationSupported())
         {
             var bar = window.AppWindow.TitleBar;

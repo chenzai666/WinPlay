@@ -23,6 +23,7 @@ public partial class App : Application
     private MainViewModel? _viewModel;
     private DispatcherTimer? _materialProbeTimer;
     private Window? _designProbeWindow;
+    private TransparencyProbe? _transparencyProbe;
     private static Mutex? _instanceMutex;
 
     public App()
@@ -48,6 +49,14 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-transparency-ui", StringComparer.Ordinal))
+        {
+            TextColorSettings.Apply();
+            _transparencyProbe = new TransparencyProbe();
+            _transparencyProbe.Start();
+            return;
+        }
+
         if (Environment.GetCommandLineArgs().Skip(1).Contains("--diagnose-design-ui", StringComparer.Ordinal))
         {
             TextColorSettings.Apply();

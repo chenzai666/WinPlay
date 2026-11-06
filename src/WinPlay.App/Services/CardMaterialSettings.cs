@@ -113,4 +113,7 @@ public static class CardMaterialSettings
         }
         catch (Exception) { }
     }
+
+    internal static void PreviewTransparency(int transparency) =>
+        Transparency = Math.Clamp(transparency, 0, 100);
 }

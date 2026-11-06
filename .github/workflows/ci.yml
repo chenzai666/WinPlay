@@ -66,6 +66,9 @@ jobs:
           name: WinPlay-ui-update-win-x64
           path: |
             publish/win-x64/WinPlay.*
+            publish/win-x64/Win2D*
+            publish/win-x64/Microsoft.Graphics.*
+            publish/win-x64/THIRD-PARTY-NOTICES.md
             publish/win-x64/resources.pri
             publish/win-x64/publish-manifest.json
           retention-days: 7
