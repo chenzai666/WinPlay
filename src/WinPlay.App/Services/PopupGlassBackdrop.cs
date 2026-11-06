@@ -51,7 +51,7 @@ internal sealed class PopupGlassBackdrop : SystemBackdrop
         if (_hostAvailable)
         {
             _windowProc = OnWindowMessage;
-            _subclassed = SetWindowSubclass(hwnd, _windowProc, UIntPtr.One, UIntPtr.Zero);
+            _subclassed = SetWindowSubclass(hwnd, _windowProc, new UIntPtr(1), UIntPtr.Zero);
             if (_subclassed) ClearInitialBackground(hwnd);
             else
             {
@@ -198,7 +198,7 @@ internal sealed class PopupGlassBackdrop : SystemBackdrop
         _settings.ColorValuesChanged -= OnSettingsChanged;
         _settings.AdvancedEffectsEnabledChanged -= OnSettingsChanged;
         if (_subclassed && _hwnd != IntPtr.Zero && _windowProc is not null)
-            RemoveWindowSubclass(_hwnd, _windowProc, UIntPtr.One);
+            RemoveWindowSubclass(_hwnd, _windowProc, new UIntPtr(1));
         _subclassed = false;
         _windowProc = null;
         _hwnd = IntPtr.Zero;
