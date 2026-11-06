@@ -53,6 +53,7 @@ public sealed partial class FlyoutWindow : Window
             ref cornerPreference, sizeof(int));
         int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE: one system outline, no extra stroke.
         DwmSetWindowAttribute(hwnd, 34 /*DWMWA_BORDER_COLOR*/, ref borderColor, sizeof(int));
+        Services.WindowShapeService.Rounded(this);
         ApplyMaterial();
 
         Activated += OnActivated;
