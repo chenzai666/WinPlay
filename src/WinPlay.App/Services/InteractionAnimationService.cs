@@ -96,7 +96,7 @@ public static class InteractionAnimationService
             ++_generation;
             _queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
             _settings.AnimationsEnabledChanged += AnimationsChanged;
-            _accessibility.HighContrastChanged += ContrastChanged;
+            _settings.ColorValuesChanged += ColorsChanged;
             _oldBackground = button.ReadLocalValue(Control.BackgroundProperty);
             _oldBorder = button.ReadLocalValue(Control.BorderBrushProperty);
             button.Background = _background;
@@ -116,7 +116,7 @@ public static class InteractionAnimationService
             _active = false;
             ++_generation;
             _settings.AnimationsEnabledChanged -= AnimationsChanged;
-            _accessibility.HighContrastChanged -= ContrastChanged;
+            _settings.ColorValuesChanged -= ColorsChanged;
             _queue = null;
             button.PointerEntered -= Entered;
             button.PointerExited -= Exited;
@@ -145,7 +145,7 @@ public static class InteractionAnimationService
         private void SourceChanged(DependencyObject sender, DependencyProperty property) => Apply(0);
 
         private void AnimationsChanged(Windows.UI.ViewManagement.UISettings sender, object args) => QueueSettingsChange(false);
-        private void ContrastChanged(Windows.UI.ViewManagement.AccessibilitySettings sender, object args) => QueueSettingsChange(true);
+        private void ColorsChanged(Windows.UI.ViewManagement.UISettings sender, object args) => QueueSettingsChange(true);
 
         private void QueueSettingsChange(bool paletteChanged)
         {
@@ -277,7 +277,7 @@ public static class InteractionAnimationService
             ++_generation;
             _queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
             _settings.AnimationsEnabledChanged += OnSettingsChanged;
-            _accessibility.HighContrastChanged += OnContrastChanged;
+            _settings.ColorValuesChanged += OnColorsChanged;
             _pressedToken = button.RegisterPropertyChangedCallback(ButtonBase.IsPressedProperty, OnStateChanged);
             _enabledToken = button.RegisterPropertyChangedCallback(Control.IsEnabledProperty, OnStateChanged);
             Update();
@@ -288,7 +288,7 @@ public static class InteractionAnimationService
             if (!_observing) return;
             ++_generation;
             _settings.AnimationsEnabledChanged -= OnSettingsChanged;
-            _accessibility.HighContrastChanged -= OnContrastChanged;
+            _settings.ColorValuesChanged -= OnColorsChanged;
             _queue = null;
             button.UnregisterPropertyChangedCallback(ButtonBase.IsPressedProperty, _pressedToken);
             button.UnregisterPropertyChangedCallback(Control.IsEnabledProperty, _enabledToken);
@@ -301,7 +301,7 @@ public static class InteractionAnimationService
         private void OnStateChanged(DependencyObject sender, DependencyProperty property) => Update();
 
         private void OnSettingsChanged(Windows.UI.ViewManagement.UISettings sender, object args) => QueueSettingsChange();
-        private void OnContrastChanged(Windows.UI.ViewManagement.AccessibilitySettings sender, object args) => QueueSettingsChange();
+        private void OnColorsChanged(Windows.UI.ViewManagement.UISettings sender, object args) => QueueSettingsChange();
 
         private void QueueSettingsChange()
         {
