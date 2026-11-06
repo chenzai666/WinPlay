@@ -34,6 +34,10 @@ public sealed partial class HotkeySettingsWindow : Window
         DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(SettingsTitleBar);
+        // DWM draws its frame outside SetWindowRgn; suppress that second outline
+        // while retaining the native caption buttons and drag behavior.
+        int borderColor = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 34 /*DWMWA_BORDER_COLOR*/, ref borderColor, sizeof(int));
         ApplyMaterial();
         double scale = GetDpiForWindow(hwnd) / 96.0;
         var area = DisplayArea.GetFromWindowId(app.Id, DisplayAreaFallback.Primary).WorkArea;
