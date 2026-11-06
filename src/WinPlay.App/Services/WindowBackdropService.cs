@@ -104,7 +104,7 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         LogState("connected");
     }
 
-    private void OnControllerStateChanged(DesktopAcrylicController sender, object args)
+    private void OnControllerStateChanged(ISystemBackdropControllerWithTargets sender, object args)
     {
         _queue?.TryEnqueue(() =>
         {
