@@ -59,6 +59,7 @@ internal sealed class TransparencyProbe
         _card.DispatcherQueue.TryEnqueue(() =>
         {
             if (_stopped) return;
+            _card.AppWindow.Show();
             ResizeCard();
             Step();
             _timer.Start();
