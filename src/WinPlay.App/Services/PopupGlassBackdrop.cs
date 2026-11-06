@@ -48,6 +48,7 @@ internal sealed class PopupGlassBackdrop : SystemBackdrop
         var hwnd = Microsoft.UI.Win32Interop.GetWindowFromWindowId(xamlRoot.ContentIslandEnvironment.AppWindowId);
         _hwnd = hwnd;
         _hostAvailable = ConfigureHost(hwnd);
+        RemoveNativeCaption(hwnd);
         if (_hostAvailable)
         {
             _windowProc = OnWindowMessage;
@@ -156,6 +157,26 @@ internal sealed class PopupGlassBackdrop : SystemBackdrop
         catch (UnauthorizedAccessException) { }
     }
 
+    private static void RemoveNativeCaption(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        const int windowStyle = -16;
+        const int caption = 0x00C00000;
+        int style = GetWindowLong(hwnd, windowStyle);
+        if ((style & caption) == 0) return;
+        Marshal.SetLastPInvokeError(0);
+        int previous = SetWindowLong(hwnd, windowStyle, style & ~caption);
+        int error = Marshal.GetLastPInvokeError();
+        if (previous == 0 && error != 0)
+        {
+            Log($"popup-glass caption-style-failed error={error}");
+            return;
+        }
+        // Recalculate the non-client area without moving, resizing, focusing or reordering the popup.
+        if (!SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0037))
+            Log($"popup-glass caption-frame-failed error={Marshal.GetLastPInvokeError()}");
+    }
+
     private IntPtr OnWindowMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, UIntPtr id, UIntPtr reference)
     {
         const uint eraseBackground = 0x0014;
@@ -262,6 +283,13 @@ internal sealed class PopupGlassBackdrop : SystemBackdrop
     private static extern IntPtr GetDC(IntPtr hwnd);
     [DllImport("user32.dll")]
     private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")]
     private static extern int FillRect(IntPtr dc, ref Rect rect, IntPtr brush);
     [DllImport("gdi32.dll")]
