@@ -215,6 +215,8 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         if (_controller is not null)
         {
             _controller.StateChanged -= OnControllerStateChanged;
+            if (ReferenceEquals(target.SystemBackdrop, _opacityMask) && _opacityMask is not null)
+                target.SystemBackdrop = _opacityMask.Source;
             _controller.RemoveSystemBackdropTarget(target);
             _controller.Dispose();
             _controller = null;
