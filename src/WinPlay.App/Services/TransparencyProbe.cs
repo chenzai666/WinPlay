@@ -18,6 +18,8 @@ internal sealed class TransparencyProbe
     private int _step;
     private bool _refreshHud;
     private bool _stopped;
+    private bool _started;
+    private int _startAttempts;
 
     internal TransparencyProbe()
     {
@@ -32,6 +34,7 @@ internal sealed class TransparencyProbe
         var root = new Grid { Width = 384, Height = 220, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         root.Children.Add(content);
         _card = new Window { Title = "WinPlay 透明度设备面板测试", Content = root };
+        _card.AppWindow.IsShownInSwitchers = false;
         if (_card.AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsResizable = false;
@@ -55,20 +58,31 @@ internal sealed class TransparencyProbe
 
     internal void Start()
     {
+        // Match the real flyout: position, show, activate, then refresh material.
+        var work = DisplayArea.GetFromWindowId(_card.AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        _card.AppWindow.Move(new Windows.Graphics.PointInt32(work.X + 40, work.Y + 40));
+        _card.AppWindow.Show();
         _card.Activate();
-        _card.DispatcherQueue.TryEnqueue(() =>
-        {
-            if (_stopped) return;
-            _card.AppWindow.Show();
-            ResizeCard();
-            Step();
-            _timer.Start();
-        });
+        WindowBackdropService.Refresh(_card);
+        _timer.Start();
+        _card.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, TryStart);
     }
 
     private void OnCardLoaded(object sender, RoutedEventArgs e)
     {
-        if (!_stopped) ResizeCard();
+        if (_stopped) return;
+        ResizeCard();
+        _card.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, TryStart);
+    }
+
+    private void TryStart()
+    {
+        if (_stopped || _started || _card.Content is not FrameworkElement root ||
+            !root.IsLoaded || root.XamlRoot is null || root.ActualWidth <= 0 || root.ActualHeight <= 0) return;
+        ResizeCard();
+        WindowBackdropService.Refresh(_card);
+        _started = true;
+        Step();
     }
 
     private void ResizeCard()
@@ -81,6 +95,12 @@ internal sealed class TransparencyProbe
 
     private void OnTick(object? sender, object args)
     {
+        if (!_started)
+        {
+            TryStart();
+            if (!_started && ++_startAttempts >= 4) Stop();
+            return;
+        }
         if (!_refreshHud)
         {
             _hud.ShowLevel("测试设备", 65);
