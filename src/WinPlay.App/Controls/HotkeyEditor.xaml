@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid>
-        <Button x:Name="PreviewButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+        <Button x:Name="PreviewButton" Style="{StaticResource SettingsButtonStyle}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                 Click="OnEdit" ToolTipService.ToolTip="点击编辑快捷键">
             <ItemsControl x:Name="Keycaps">
                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
