@@ -29,22 +29,25 @@ internal sealed class TransparencyProbe
             Style = (Style)Application.Current.Resources["DeviceCardStyle"],
             IsChecked = true,
         });
-        var root = new Grid { Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
+        var root = new Grid { Width = 384, Height = 220, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         root.Children.Add(content);
         _card = new Window { Title = "WinPlay 透明度设备面板测试", Content = root };
         if (_card.AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(true, false);
             presenter.IsResizable = false;
+            presenter.IsMaximizable = false;
+            presenter.IsMinimizable = false;
             presenter.IsAlwaysOnTop = true;
+            presenter.SetBorderAndTitleBar(true, false);
         }
         IntPtr hwnd = WindowNative.GetWindowHandle(_card);
-        double scale = GetDpiForWindow(hwnd) / 96.0;
-        PopupWindowService.ResizeClient(_card.AppWindow, hwnd, (int)Math.Ceiling(384 * scale), (int)Math.Ceiling(220 * scale));
+        int borderColor = unchecked((int)0xFFFFFFFE);
+        DwmSetWindowAttribute(hwnd, 34, ref borderColor, sizeof(int));
+        ResizeCard();
+        root.Loaded += OnCardLoaded;
         WindowShapeService.Rounded(_card);
         WindowBackdropService.ApplyAcrylic(_card);
         _hud = new VolumeOsdWindow();
-        WindowBackdropService.ApplyAcrylic(_hud);
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += OnTick;
         _card.Closed += OnClosed;
@@ -53,8 +56,26 @@ internal sealed class TransparencyProbe
     internal void Start()
     {
         _card.Activate();
-        Step();
-        _timer.Start();
+        _card.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_stopped) return;
+            ResizeCard();
+            Step();
+            _timer.Start();
+        });
+    }
+
+    private void OnCardLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!_stopped) ResizeCard();
+    }
+
+    private void ResizeCard()
+    {
+        IntPtr hwnd = WindowNative.GetWindowHandle(_card);
+        double scale = GetDpiForWindow(hwnd) / 96.0;
+        if (scale <= 0) scale = 1;
+        PopupWindowService.ResizeClient(_card.AppWindow, hwnd, (int)Math.Ceiling(384 * scale), (int)Math.Ceiling(220 * scale));
     }
 
     private void OnTick(object? sender, object args)
@@ -96,6 +117,7 @@ internal sealed class TransparencyProbe
         _timer.Stop();
         _timer.Tick -= OnTick;
         _card.Closed -= OnClosed;
+        if (_card.Content is FrameworkElement root) root.Loaded -= OnCardLoaded;
         _hud.Close();
         if (!cardAlreadyClosed) _card.Close();
         Application.Current.Exit();
@@ -103,4 +125,7 @@ internal sealed class TransparencyProbe
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 }
