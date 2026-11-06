@@ -17,4 +17,8 @@ internal readonly record struct AcrylicMaterial(float TintOpacity, float Luminos
         // dark mode so a bright desktop cannot wash out light-colored text.
         return dark ? material with { LuminosityOpacity = 0.75f + 0.15f * material.TintOpacity } : material;
     }
+
+    // Fade the entire popup material (including blur), not its text or controls.
+    public static float PopupBackdropOpacity(int transparency) =>
+        Math.Clamp((100 - Math.Clamp(transparency, 0, 100)) / 30f, 0f, 1f);
 }

@@ -7,6 +7,18 @@ namespace WinPlay.Core.Tests;
 public class AcrylicMaterialTests
 {
     [Theory]
+    [InlineData(0, 1f)]
+    [InlineData(70, 1f)]
+    [InlineData(85, 0.5f)]
+    [InlineData(90, 1f / 3f)]
+    [InlineData(95, 1f / 6f)]
+    [InlineData(100, 0f)]
+    public void PopupMaterialFadesAboveSeventyAndDisappearsAtOneHundred(int value, float expected)
+    {
+        Assert.Equal(expected, AcrylicMaterial.PopupBackdropOpacity(value), 5);
+    }
+
+    [Theory]
     [InlineData(-1, 1.0f, 0.2f)]
     [InlineData(0, 1.0f, 0.2f)]
     [InlineData(50, 0.5f, 0.1f)]

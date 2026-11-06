@@ -83,6 +83,9 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
     private XamlRoot? _root;
     private ICompositionSupportsSystemBackdrop? _target;
     private SystemBackdropConfiguration? _configuration;
+    private Windows.UI.Composition.CompositionMaskBrush? _opacityMask;
+    private Windows.UI.Composition.CompositionColorBrush? _opacityBrush;
+    private Microsoft.UI.Dispatching.DispatcherQueue? _queue;
     private (bool Dark, bool HighContrast, int Transparency, Color Accent)? _lastAppearance;
 
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
@@ -91,12 +94,24 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         _target = target;
         _root = xamlRoot;
         _configuration = new SystemBackdropConfiguration();
+        _queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _controller = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Thin };
-        _controller.StateChanged += (_, _) => LogState("state-changed");
+        _controller.StateChanged += OnControllerStateChanged;
         _controller.AddSystemBackdropTarget(target);
         UpdateConfiguration(target, xamlRoot);
         _controller.SetSystemBackdropConfiguration(_configuration);
+        UpdatePopupOpacity();
         LogState("connected");
+    }
+
+    private void OnControllerStateChanged(DesktopAcrylicController sender, object args)
+    {
+        _queue?.TryEnqueue(() =>
+        {
+            if (_controller is null) return;
+            UpdatePopupOpacity();
+            LogState("state-changed");
+        });
     }
 
     protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
@@ -129,7 +144,11 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         bool highContrast = _configuration?.IsHighContrast == true;
         Color accent = UsesAccentTint ? TextColorSettings.Accent : default;
         var appearance = (dark, highContrast, CardMaterialSettings.Transparency, accent);
-        if (_lastAppearance == appearance) return;
+        if (_lastAppearance == appearance)
+        {
+            UpdatePopupOpacity();
+            return;
+        }
         _lastAppearance = appearance;
         var material = UsesAccentTint
             ? AcrylicMaterial.ForSettings(CardMaterialSettings.Transparency, dark)
@@ -152,7 +171,31 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         nudge.R = (byte)(tint.R == 255 ? 254 : tint.R + 1);
         _controller.TintColor = nudge;
         _controller.TintColor = tint;
+        UpdatePopupOpacity();
         LogState("appearance-changed");
+    }
+
+    private void UpdatePopupOpacity()
+    {
+        if (UsesAccentTint || _controller is null || _target?.SystemBackdrop is not { } current) return;
+        // A controller may replace its output when the system material changes.
+        // Reuse one mask and never wrap the mask itself. Use the target's compositor,
+        // which belongs to Windows.UI.Composition in the App SDK 1.7 projection.
+        if (!ReferenceEquals(current, _opacityMask))
+        {
+            if (_opacityMask is null)
+            {
+                _opacityBrush = current.Compositor.CreateColorBrush();
+                _opacityMask = current.Compositor.CreateMaskBrush();
+                _opacityMask.Mask = _opacityBrush;
+            }
+            _opacityMask.Source = current;
+            _target.SystemBackdrop = _opacityMask;
+        }
+        bool fallback = _configuration?.IsHighContrast == true ||
+            _controller.State != SystemBackdropState.Active;
+        float opacity = fallback ? 1f : AcrylicMaterial.PopupBackdropOpacity(CardMaterialSettings.Transparency);
+        _opacityBrush!.Color = Color.FromArgb((byte)Math.Round(opacity * 255), 255, 255, 255);
     }
 
     private void LogState(string reason)
@@ -161,7 +204,7 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
         if (string.IsNullOrWhiteSpace(path) || _controller is null) return;
         try
         {
-            File.AppendAllText(path, $"{DateTimeOffset.Now:O} {reason} state={_controller.State} theme={_configuration?.Theme} active={_configuration?.IsInputActive} highContrast={_configuration?.IsHighContrast} tint={_controller.TintOpacity:F3} luminosity={_controller.LuminosityOpacity:F3}\n");
+            File.AppendAllText(path, $"{DateTimeOffset.Now:O} {reason} state={_controller.State} theme={_configuration?.Theme} active={_configuration?.IsInputActive} highContrast={_configuration?.IsHighContrast} tint={_controller.TintOpacity:F3} luminosity={_controller.LuminosityOpacity:F3} transparency={CardMaterialSettings.Transparency} backgroundAlpha={_opacityBrush?.Color.A} source={_opacityMask?.Source?.GetType().Name}\n");
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
@@ -171,10 +214,16 @@ internal sealed class CardAcrylicBackdrop : SystemBackdrop
     {
         if (_controller is not null)
         {
+            _controller.StateChanged -= OnControllerStateChanged;
             _controller.RemoveSystemBackdropTarget(target);
             _controller.Dispose();
             _controller = null;
         }
+        _opacityMask?.Dispose();
+        _opacityBrush?.Dispose();
+        _opacityMask = null;
+        _opacityBrush = null;
+        _queue = null;
         _root = null;
         _target = null;
         _configuration = null;

@@ -4,6 +4,13 @@ All notable changes to WinPlay are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] — 2026-11-06
+
+### 修复
+
+- 设备面板与音量HUD在通透度70以上逐步淡出整个磨砂背景，100时背景完全透明，文字与控件保留。
+- 保持设置页面现有材质，加入浅深主题下70、85、90、95、100的独立有限时诊断。
+
 ## [0.1.6] — 2026-11-06
 
 ### 修复

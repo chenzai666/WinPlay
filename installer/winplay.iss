@@ -2,10 +2,10 @@
 ; WinPlay installer (Inno Setup). Per-user install — no administrator rights, so Windows
 ; does not show a UAC prompt. Bundles the self-contained build (no .NET prerequisite).
 ;
-; 构建：ISCC.exe /DSourceDir=<发布目录> /DAppVersion=0.1.6 /DAppArchitecture=x64 winplay.iss
+; 构建：ISCC.exe /DSourceDir=<发布目录> /DAppVersion=0.1.7 /DAppArchitecture=x64 winplay.iss
 
 #ifndef AppVersion
-  #define AppVersion "0.1.6"
+  #define AppVersion "0.1.7"
 #endif
 #ifndef AppArchitecture
   #define AppArchitecture "x64"
