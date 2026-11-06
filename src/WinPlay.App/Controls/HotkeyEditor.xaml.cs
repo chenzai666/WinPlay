@@ -22,7 +22,12 @@ public sealed partial class HotkeyEditor : UserControl
     public string Text
     {
         get => Input.Text;
-        set => Input.Text = value ?? "";
+        set
+        {
+            Input.Text = value ?? "";
+            // TextChanged can be deferred while the input is collapsed or unloaded.
+            UpdatePreview();
+        }
     }
 
     private void OnEdit(object sender, RoutedEventArgs e)
@@ -35,6 +40,7 @@ public sealed partial class HotkeyEditor : UserControl
 
     private void OnInputLostFocus(object sender, RoutedEventArgs e)
     {
+        UpdatePreview();
         Input.Visibility = Visibility.Collapsed;
         PreviewButton.Visibility = Visibility.Visible;
     }
